@@ -781,6 +781,7 @@ body Port::config { args } {
     set outer_vlan_step 1
     set outer_vlan_num  1
     set outer_vlan_priority 0
+    set ipv6_addr_step 1
     
     set enable_arp 1
     set intf_ip_num	1
