@@ -50,7 +50,7 @@ class BgpSession {
         }
         Deputs "----- hBgpSession: $hBgpSession, hPort: $hPort -----"
         if { $hBgpSession != "NULL" } {
-            set handle [GetValidHandleObj "bgp" $hBgpSession $hPort]
+            set handle [GetValidNgpfHandleObj "bgp" $hBgpSession $hPort]
             Deputs "----- handle: $handle -----"
 
             if { $handle != "" } {
@@ -106,7 +106,7 @@ class SimRoute {
         Deputs "----- hRouteBlock: $hRouteBlock, $bgpobj: $hBgp -----"
         set deviceGroupObj [$bgpObj cget -deviceHandle]
         if { $hRouteBlock != "NULL" } {
-            set handle [GetValidHandleObj "simroute" $hRouteBlock $deviceGroupObj]
+            set handle [GetValidNgpfHandleObj "simroute" $hRouteBlock $deviceGroupObj]
             Deputs "----- handle: $handle -----"
             if { $handle != "" } {
                 set handleName [ ixNet getA $handle -name ]
@@ -171,100 +171,120 @@ body BgpSession::reborn { {version ipv4}  } {
     global bgpObj
     set tag "body BgpSession::reborn [info script]"
     Deputs "----- TAG: $tag -----"
-    set ip_version [ $portObj cget -ipVersion ]
-    #set ip_version $version
-    if { $ip_version != "<undefined>" } {
-        set ip_version $ip_version
-    } else {
-        set ip_version $version
-    }
+    set ip_version $version
+
     if { [ catch {
         set hPort   [ $portObj cget -handle ]
     } ] } {
         error "$errNumber(1) Port Object in BgpSession ctor"
     }
 
-    #-- add bgp protocol
-    array set routeBlock [ list ]
+    #-- add interface and bgp protocol
+    set bgpObj ""
     set topoObjList [ixNet getL [ixNet getRoot] topology]
     Deputs "topoObjList: $topoObjList"
+    set vportList [ixNet getL [ixNet getRoot] vport]
+    set vport [ lindex $vportList end ]
+    if {[llength $topoObjList] != [llength $vportList]} {
+        foreach topoObj $topoObjList {
+            set vportObj [ixNet getA $topoObj -vports]
+            if {$vportObj != $vport && $vport == $hPort} {
+                set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
+                set deviceGroupObj [ixNet add $topoObj deviceGroup]
+                set ethernetObj [ixNet add $deviceGroupObj ethernet]
+                ixNet commit
+                if { $ip_version == "ipv4" } {
+                    set ipv4Obj [ixNet add $ethernetObj ipv4]
+                    ixNet commit
+                }
+                if { $ip_version == "ipv6" } {
+                    set ipv6Obj [ixNet add $ethernetObj ipv6]
+                    ixNet commit
+                }
+            }
+            break
+        }
+    }
+    set topoObjList [ixNet getL [ixNet getRoot] topology]
+
     if { [ llength $topoObjList ] == 0 } {
         set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
         set deviceGroupObj [ixNet add $topoObj deviceGroup]
         set ethernetObj [ixNet add $deviceGroupObj ethernet]
-
         if { $ip_version == "ipv4" } {
-            set ipv4Obj [ixNet add $ethObj ipv4]
+            set ipv4Obj [ixNet add $ethernetObj ipv4]
             set bgpObj [ixNet add $ipv4Obj bgpIpv4Peer]
             ixNet commit
-        } elseif { $ip_version == "ipv6" } {
-            set ipv6Obj [ixNet add $ethObj ipv6]
+        }
+        if { $ip_version == "ipv6" } {
+            set ipv6Obj [ixNet add $ethernetObj ipv6]
             set bgpObj [ixNet add $ipv6Obj bgpIpv6Peer]
+            ixNet commit
+            ixNet setA [ixNet getA $bgpObj -dutIp]/singleValue -value "0:0:0:0:0:0:0:0"
+            ixNet commit
         }
         set bgpObj [ ixNet remapIds $bgpObj ]
+        ixNet setA $bgpObj -name $this
+        ixNet commit
+        array set routeBlock [ list ]
 
-    } elseif { [ llength $topoObjList ] != 0 } {
-
-        Deputs "ip_version: $ip_version"
-        if { $ip_version == "ipv4" } {
-            foreach topoObj $topoObjList {
-                set vportObj [ixNet getA $topoObj -vports]
-                if {$vportObj == $hPort} {
-                    set deviceGroupList [ixNet getL $topoObj deviceGroup]
-                    foreach deviceGroupObj $deviceGroupList {
-                        set ethernetList [ixNet getL $deviceGroupObj ethernet]
-                        foreach ethernetObj $ethernetList {
-                            set ipv4Obj [ixNet getL $ethernetObj ipv4]
+    } else {
+        foreach topoObj $topoObjList {
+            set vportObj [ixNet getA $topoObj -vports]
+            if {$vportObj == $hPort} {
+                set deviceGroupList [ixNet getL $topoObj deviceGroup]
+                foreach deviceGroupObj $deviceGroupList {
+                    set ethernetList [ixNet getL $deviceGroupObj ethernet]
+                    foreach ethernetObj $ethernetList {
+                        set ipv4Obj [ixNet getL $ethernetObj ipv4]
+                        if { $ip_version == "ipv4" } {
                             if {[ info exists ipv4_addr ]} {
-                                set ipObj [ixNet getA $ipv4Obj -address]
-                                set ipList [ixNet getA $ipObj -values]
-                                foreach ipaddr $ipList {
-                                    if {$ipaddr == $ipv4_addr} {
-                                        #set ethernetObj $ethernetObj
-                                        set bgpObj [ixNet getL $ipv4Obj bgpIpv4Peer]
-                                        break
+                                set ipaddr [ixNet getA [ixNet getA $ipv4Obj -address]/singleValue -value]
+                                if {$ipaddr == $ipv4_addr} {
+                                    set ethernetObj $ethernetObj
+                                    set bgpObj [ixNet getL $ipv4Obj bgpIpv4Peer]
+                                    if {[llength $bgpObj] != 0} {
+                                        set bgpObj [ ixNet remapIds $bgpObj ]
+                                    } else {
+                                        set bgpObj [ixNet add $ipv4Obj bgpIpv4Peer]
+                                        ixNet commit
+                                        set bgpObj [ ixNet remapIds $bgpObj ]
+                                    }
+                                    break
+                                }
+                            } else {
+                                if { [llength $ipv4Obj] == 0 } {
+                                    set ipv6Obj [ixNet getL $ethernetObj ipv6]
+                                    if { [llength $ipv6Obj] != 0 } {
+                                        if { [llength $bgpObj] == 0 } {
+                                            set bgpObj [ixNet add $ipv6Obj bgpIpv6Peer]
+                                            ixNet commit
+                                            set bgpObj [ ixNet remapIds $bgpObj ]
+                                        }
+                                    }
+                                } else {
+                                    if { [llength $bgpObj] == 0 } {
+                                        set bgpObj [ixNet add $ipv4Obj bgpIpv4Peer]
+                                        ixNet commit
+                                        set bgpObj [ ixNet remapIds $bgpObj ]
                                     }
                                 }
                             }
-                            if { [llength [ixNet getL $ethernetObj ipv4]] == 0 } {
-                                set ipv6Obj [ixNet getL $ethernetObj ipv6]
-                                set bgpObj [ixNet add $ipv6Obj bgpIpv6Peer]
+                        } elseif { $ip_version == "ipv6" } {
+                            set ipv6Obj [ixNet getL $ethernetObj ipv6]
+                            if { [llength $ipv6Obj] == 0 } {
+                                set ipv6Obj [ixNet add $ethernetObj ipv6]
                                 ixNet commit
-                                set bgpObj [ ixNet remapIds $bgpObj ]
-                            } else {
-                                set ipv4Obj [ixNet getL $ethernetObj ipv4]
-                                set bgpObj [ixNet getL $ipv4Obj bgpIpv4Peer]
-                                if {[llength $bgpObj] != 0} {
-                                    set bgpObj [ ixNet remapIds $bgpObj ]
-                                } else {
-                                    set bgpObj [ixNet add $ipv4Obj bgpIpv4Peer]
-                                    ixNet commit
-                                    set bgpObj [ ixNet remapIds $bgpObj ]
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } elseif { $ip_version == "ipv6" } {
-            foreach topoObj $topoObjList {
-                set vportObj [ixNet getA $topoObj -vports]
-                if {$vportObj == $hPort} {
-                    set deviceGroupList [ixNet getL $topoObj deviceGroup]
-                    foreach deviceGroupObj $deviceGroupList {
-                        set ethernetList [ixNet getL $deviceGroupObj ethernet]
-                        foreach ethernetObj $ethernetList {
-                            if { [llength [ixNet getL $ethernetObj ipv6]] == 0 } {
-                                set ipv4Obj [ixNet getL $ethernetObj ipv4]
-                                set bgpObj [ixNet add $ipv4Obj bgpIpv4Peer]
-                                ixNet commit
-                                set bgpObj [ ixNet remapIds $bgpObj ]
-                            } else {
-                                set ipv6Obj [ixNet getL $ethernetObj ipv6]
                                 set bgpObj [ixNet getL $ipv6Obj bgpIpv6Peer]
                                 if {[llength $bgpObj] != 0} {
                                     set bgpObj [ ixNet remapIds $bgpObj ]
                                 } else {
+                                    set bgpObj [ixNet add $ipv6Obj bgpIpv6Peer]
+                                    ixNet commit
+                                    set bgpObj [ ixNet remapIds $bgpObj ]
+                                }
+                            } else {
+                                if { [llength $bgpObj] == 0 } {
                                     set bgpObj [ixNet add $ipv6Obj bgpIpv6Peer]
                                     ixNet commit
                                     set bgpObj [ ixNet remapIds $bgpObj ]
@@ -276,6 +296,7 @@ body BgpSession::reborn { {version ipv4}  } {
             }
         }
     }
+
     #-- set capability
     foreach bgp $bgpObj {
         set filterList { -filterIpV4Mpls -filterIpV4MplsVpn -filterIpV4Multicast -filterIpV4Unicast -filterIpV6Mpls -filterIpV6MplsVpn -filterIpV6Multicast -filterIpV6Unicast \
@@ -405,12 +426,20 @@ body BgpSession::config { args } {
                         set ipv4Obj [ixNet getL $ethernetObj ipv4]
                         ixNet setA [ixNet getA $ipv4Obj -address]/singleValue -value $ipv4_addr
                         ixNet commit
-                    } else {
-                        Deputs "ipv6: [ixNet getL $ethernetObj ipv6]"
-                        Deputs "interface:$ethernetObj"
+                    }
+                }
+                if { [ info exists ipv6_addr ] } {
+                    if { $ip_version == "ipv6" } {
                         set ipv6Obj [ixNet getL $ethernetObj ipv6]
-                        ixNet setA [ixNet getA $ipv6Obj -address]/singleValue -value $ip
-                        ixNet commit
+                        if { [llength $ipv6Obj] != 0 } {
+                            ixNet setA [ixNet getA $ipv6Obj -address]/singleValue -value $ipv6_addr
+                            ixNet commit
+                        } else {
+                            set ipv6Obj [ixNet add $ethernetObj ipv6]
+                            ixNet commit
+                            ixNet setA [ixNet getA $ipv6Obj -address]/singleValue -value $ipv6_addr
+                            ixNet commit
+                        }
                     }
                 }
                 if { [ info exists ipv4_gw ] } {
@@ -418,7 +447,10 @@ body BgpSession::config { args } {
                         set ipv4Obj [ixNet getL $ethernetObj ipv4]
                         ixNet setA [ixNet getA $ipv4Obj -gatewayIp]/singleValue  -value $ipv4_gw
                         ixNet commit
-                    } else {
+                    }
+                }
+                if { [ info exists gateway ] } {
+                    if { $ip_version == "ipv6" } {
                         set ipv6Obj [ixNet getL $ethernetObj ipv6]
                         ixNet setA [ixNet getA $ipv6Obj -gatewayIp]/singleValue -value $gateway
                         ixNet commit
@@ -431,12 +463,52 @@ body BgpSession::config { args } {
                 if { [ info exists loopback_ipv4_addr ] } {
                     Deputs "not implemented parameter: loopback_ipv4_addr"
                 }
+
                 if { $ip_version == "ipv4" } {
                     set ipv4Obj [ixNet getL $ethernetObj ipv4]
-                    set bgpObj [ixNet getList $ipv4Obj bgpIpv4Peer]
+                    if {[llength $ipv4Obj] == 0} {
+                        set ipv6Obj [ixNet getL $ethernetObj ipv6]
+                        if {[llength $ipv6Obj] != 0} {
+                            set bgpObj [ixNet getList $ipv6Obj bgpIpv6Peer]
+                            if { [llength $bgpObj] == 0 } {
+                                set bgpObj [ixNet add $ipv6Obj bgpIpv6Peer]
+                                ixNet commit
+                                set bgpObj [ ixNet remapIds $bgpObj ]
+                            } else {
+                                set bgpObj [ixNet getL $ipv6Obj bgpIpv6Peer]
+                            }
+                        }
+                    } else {
+                        set bgpObj [ixNet getList $ipv4Obj bgpIpv4Peer]
+                        if { [llength $bgpObj] == 0 } {
+                            set bgpObj [ixNet add $ipv4Obj bgpIpv4Peer]
+                            ixNet commit
+                            set bgpObj [ ixNet remapIds $bgpObj ]
+                        } else {
+                            set bgpObj [ixNet getL $ipv4Obj bgpIpv4Peer]
+                        }
+                    }
                 } else {
                     set ipv6Obj [ixNet getL $ethernetObj ipv6]
-                    set bgpObj [ixNet getList $ipv6Obj bgpIpv6Peer]
+                    if { [llength $ipv6Obj] != 0 } {
+                        set bgpObj [ixNet getList $ipv6Obj bgpIpv6Peer]
+                        if { [llength $bgpObj] == 0 } {
+                            set bgpObj [ixNet add $ipv6Obj bgpIpv6Peer]
+                            ixNet commit
+                            set bgpObj [ ixNet remapIds $bgpObj ]
+                        } else {
+                            set bgpObj [ixNet getL $ipv6Obj bgpIpv6Peer]
+                        }
+                    } else {
+                        set ipv6Obj [ixNet add $ethernetObj ipv6]
+                        ixNet commit
+                        set bgpObj [ixNet getList $ipv6Obj bgpIpv6Peer]
+                        if { [llength $bgpObj] == 0 } {
+                            set bgpObj [ixNet add $ipv6Obj bgpIpv6Peer]
+                            ixNet commit
+                            set bgpObj [ ixNet remapIds $bgpObj ]
+                        }
+                    }
                 }
                 if { [ info exists type ] } {
                     ixNet setA [ixNet getA $bgpObj -type]/singleValue -value $type
@@ -1385,7 +1457,12 @@ class Vpn {
 			error "$errNumber(1) BGP Object in Vpn ctor"
 		}		
 	     #-- add bgpVrf protocol
-
+        if {[string first "ipv4" $hBgp] != -1} {
+            set ip_version "ipv4"
+        }
+        if {[string first "ipv6" $hBgp] != -1} {
+            set ip_version "ipv6"
+        }
 		if { $ip_version == "ipv4" } {
             set bgpVrfObj [ ixNet getL $hBgp bgpVrf ]
 		    if { [ llength $bgpVrfObj ] == 0 } {
@@ -1406,9 +1483,6 @@ class Vpn {
         if { [ llength $bgpImportObjList ] == 0 } {
             set bgpImportObjList [ ixNet add $bgpVrfObj bgpImportRouteTargetList]
 		}
-		
-		
-		
 		#ixNet setA $handle 	-name $this -enabled True
 		ixNet commit
 		array set routeBlock [ list ]				
