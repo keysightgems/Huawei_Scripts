@@ -501,7 +501,7 @@ body Port::constructor { { hw_id NULL } { medium NULL } { hPort NULL } {force 0}
 		set chassis     [ lindex $locationInfo 0 ]
 		set ModuleNo    [ lindex $locationInfo 1 ]
 		set PortNo      [ lindex $locationInfo 2 ]
-        
+
         if { $LoadConfigMode } {
             set handle [GetValidHandleObj "port" $hw_id]
 			if {$handle != ""} {
@@ -765,7 +765,8 @@ body Port::config { args } {
     global errorInfo
     global errNumber
 
-    set EType [ list eth pos atm 10g_lan 10g_wan 40g_lan 100g_lan 40gpos ]
+    # set EType [ list eth pos atm 10g_lan 10g_wan 40g_lan 100g_lan 40gpos ]
+    set EType [ list eth ethernetFcoe pos atm 10g_lan 10g_wan 40g_lan 100g_lan 40gpos ]
     set EMedia [ list copper fiber ]
     # set ESpeed [ list 10M 100M 1G 10G 40G 100G 155M 622M 2.5G 40GPOS ]
     set EDuplex [ list full half ]
@@ -790,6 +791,8 @@ body Port::config { args } {
     
     set mask 24
     set ipv6_mask 64
+    # set ipv6_addr_step ::1
+    set ipv6_addr_step 1
     set intf_num 1
     set ip_version "ipv4"
 	
@@ -807,6 +810,7 @@ body Port::config { args } {
             -location {
                 set location $value
             }
+            ## DONE
             -intf_ip {
                 if { $value != "" } {
                 	if { [ IsIPv4Address $value ] } {
@@ -829,6 +833,7 @@ body Port::config { args } {
 			-intf_ip_step {
                 if { [ string is integer $value ] && ( $value >= 0 ) } {
                     set intf_ip_step $value
+                    # set intf_ip_step "0.0.$intf_ip_step.0"
                 } else {
                     error "$errNumber(1) key:$key value:$value"
                 }
@@ -851,6 +856,7 @@ body Port::config { args } {
             -dut_ip_step {
                 if { [ string is integer $value ] && ( $value >= 0 ) } {
                     set dut_ip_step $value
+                    # set dut_ip_step "0.0.$dut_ip_step.0"
                 } else {
                     error "$errNumber(1) key:$key value:$value"
                 }
@@ -1168,15 +1174,21 @@ body Port::config { args } {
         }
     }
 
+	# set newtopoObj  [ ixNet add $handle topology ]
+    # Deputs "added topology value $newtopoObj for port handle $handle"
+	# ixNet commit
+	# set newtopoObj [ixNet remapIds $newtopoObj]
+	 	# set newtopoObj [ixNet add [ixNet getRoot] topology -vports $handle]
 	for { set index 0 } { $index < $intf_num } { incr index } {
         set deviceGroupObj [ixNet add [lindex $topoObj end] deviceGroup]
         ixNet commit
         set deviceGroupObj [ixNet remapIds $deviceGroupObj]
+
         ixNet setAttr $deviceGroupObj -multiplier 1
         set ethObj [ixNet add $deviceGroupObj ethernet]
         ixNet commit
         ixNet setA [ixNet getA $ethObj -mac] -pattern singleValue
-	 	lappend intf_mac [ ixNet getA [ixNet getA $ethObj -mac]/singleValue -value ]
+	 	    lappend intf_mac [ ixNet getA [ixNet getA $ethObj -mac]/singleValue -value ]
     }
     
     if { [ info exists mac_addr ] } {
@@ -1194,10 +1206,8 @@ body Port::config { args } {
     }
     
     if { [ info exists transmit_mode ] } {
-      
         ixNet setA $handle -txMode $transmit_mode
         ixNet commit
-        
     }
     ixNet commit
 
@@ -1229,11 +1239,11 @@ body Port::config { args } {
                     #ixNet setA [ixNet getA $ipv6Obj -address]/singleValue -value $ipv6_addr
                     #ixNet setA [ixNet getA $ipv6Obj -prefix]/singleValue -value $ipv6_mask
                     ixNet setA [ixNet getA $ipv6Obj -address]/counter -start $ipv6_addr
+
                     if {[info exists ipv6_addr_step] && $ipv6_addr_step != ""} {
                         ixNet setA [ixNet getA $ipv6Obj -address]/counter -step $ipv6AddrStepValue
                     }
                     ixNet setA [ixNet getA $ipv6Obj -address]/counter -direction increment
-
                     ixNet setA [ixNet getA $ipv6Obj -prefix]/counter -start $ipv6_mask
                     ixNet commit
                 }
@@ -1251,6 +1261,7 @@ body Port::config { args } {
                     ixNet setA [ixNet getA $ipv6Obj -prefix]/counter -start $ipv6_mask
                     ixNet commit
                 }
+
                 Deputs "set ipv4 on interface..."
                 if { [ info exists intf_ip ] } {
                     if { [ llength [ ixNet getList $ethObj ipv4 ] ] == 0 } {
@@ -1298,7 +1309,6 @@ body Port::config { args } {
 
     Deputs "Setting innver vlan"
     if { $flagInnerVlan } {
-
             ixNet setA $ethObj -useVlans true
             if {[info exists inner_vlan_id]} {
                 ixNet setA $ethObj -vlanCount $inner_vlan_num
@@ -1329,13 +1339,47 @@ body Port::config { args } {
             ixNet setA [ixNet getA $outerVlanHandle -priority]/singleValue -value $outer_vlan_priority
             ixNet commit
         }
+        # ixNet setA $ethObj -useVlans true
+        # ixNet setA $ethObj -vlanCount $outer_vlan_num
+        # ixNet commit
+        # ixNet setA [ixNet getA $ethObj/vlan:1 -vlanId]/singleValue -value $outer_vlan_id
+
+        # for {set b [expr {$inner_vlan_num +1}]} {$b <= [expr $outer_vlan_num + $inner_vlan_num]} {incr b} {
+        #     ixNet setA [ixNet getA $ethObj/vlan:1 -vlanId]/counter -start $outer_vlan_id
+        #     ixNet setA [ixNet getA $ethObj/vlan:1 -vlanId]/counter -step $inner_vlan_step
+        #     ixNet setA [ixNet getA $ethObj/vlan:1 -vlanId]/counter -direction increment
+        #     ixNet commit
+        # }
+        # ixNet setA $vlan -vlanId $outer_vlan_id
+        # ixNet setA $vlan -priority $outer_vlan_priority
     }
+    # if { $flagInnerVlan } {
+    #     # foreach int $interface 
+    #         # if { [ llength [ixNet getL $int vlan] ] > 0 } {
+    #         #     set vlan [ lindex [ixNet getL $int vlan] 0 ]
+    #         # } else {
+    #         #     set vlan [ ixNet add $int vlan ]
+    #         # }
+    #         if {[llength [ixNet getL $ethObj vlan]]} {
+    #             set vlan [ lindex [ixNet getL $ethObj vlan] 0 ]
+    #         } else {
+    #             set vlan [ ixNet add $ethObj vlan ]
+    #         }
+           
+    #         Deputs "vlan handle at inner $vlan"
+    #         # ixNet setM $vlan \
+    #         ixNet setA [ixNet getA $vlan -vlanId]/singleValue -value $inner_vlan_id
+    #         ixNet setA [ixNet getA $vlan -priority]/singleValue -value $inner_vlan_priority
+    # }
     ixNet commit    
     
     if { [ info exists type ] } {
         switch $type  {
             eth {
                 set ix_type ethernet
+            }
+            ethernetFcoe {
+                set ix_type ethernetFcoe
             }
             pos -
             atm {
@@ -1463,7 +1507,7 @@ body Port::config { args } {
     if { [ catch { ixNet  commit } err ] } {
 		Deputs "commit err:$err"
 	}
-	$this configure -ipVersion $ip_version
+	#$this configure -ipVersion $ip_version
     return [GetStandardReturnHeader]
 }
 
@@ -3235,7 +3279,6 @@ body Host::config { args } {
 				}
 			}
 			if { [ string tolower $ip_version ] != "ipv4" } {
-			
 				if { [ llength [ ixNet getL $int ipv6 ] ] == 0 } {
 					ixNet add $int ipv6
 					ixNet commit
