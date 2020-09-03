@@ -316,7 +316,7 @@ set assign_realportList ""
 set enx_portNameList ""
 set enx_portLocationList ""
 #Anish(Have to get this from Env variable)
-set ngpfMode 0
+set ngpfMode 1
 global ngpfMode
 
 proc GetEnxInfo { args } {
@@ -335,6 +335,22 @@ proc GetEnxInfo { args } {
         }
     }
 
+}
+proc GetOspfRouterHandle {handle {option 0}} {
+    set result [regexp {(.*)(topology:[0-9]+)/(deviceGroup:[0-9]+).*([0-9]):(.*)$} $handle match match1 match2 match3 match4]
+	set devHandle [join $match1/$match2/$match3]
+	Deputs "devHandle:$devHandle"
+	if {$match4 == 2} {
+        set returnHandle [ixNet getL $devHandle ospfv2Router]
+		set version 2
+    } elseif {$match4 == 3}  {
+		set returnHandle [ixNet getL $devHandle ospfv3Router]
+		set version 3
+	}
+	if {$option != 0} {
+		return $version
+	}
+		return $returnHandle
 }
 proc loadconfig { filename } {
     global portlist
@@ -887,45 +903,101 @@ proc GetValidHandleObj { objType handle { parentHnd "" } } {
 			return ""		
 		}
 		isis {
-			set protocols [ixNet getL $parentHnd protocols]
-			set protocol [ixNet getL $protocols isis]
-			if { [ ixNet getA $protocol -enabled ] } {
+		    #set ngpfMode 0
+		    if {$ngpfMode != 0} {
+		        set topoObjList [ixNet getL [ixNet getRoot] topology]
+		        if { [ llength $topoObjList ] != 0 } {
+		            foreach topoObj $topoObjList {
+		                set deviceGroupList [ixNet getL $topoObj deviceGroup]
+		                foreach deviceObj $deviceGroupList {
+		                    set ethernetObjList [ixNet getL $deviceObj ethernet]
+                            foreach ethernetObj $ethernetObjList {
+							    set isisObj [ixNet getL $ethernetObj isisL3]
+                                    if { $isisObj == $handle } {
+                                            return $handle
+                                    }
+                                }
+                            }
+		                }
+				    }	
+           					
+                return ""
+            } else {
+			    Deputs "check isis: checkname $handle"
+                Deputs "check parentHnd: checkname $parentHnd"
+			    set protocols [ixNet getL $parentHnd protocols]
+			    set protocol [ixNet getL $protocols isis]
+			    if { [ ixNet getA $protocol -enabled ] } {
 				
-                set routers [ixNet getL $protocol router]
-				foreach router $routers {
-					if { $router == $handle } {
-						return $handle
-					} 
-                    if {[ixNet getA [ixNet getA [lindex [ixNet getL $router interface] 0] -interfaceId] -description] == $handle} {
-                        return $router
-                    }
-				}
+                    set routers [ixNet getL $protocol router]
+				    foreach router $routers {
+					    if { $router == $handle } {
+						    return $handle
+					    } 
+                        if {[ixNet getA [ixNet getA [lindex [ixNet getL $router interface] 0] -interfaceId] -description] == $handle} {
+                           return $router
+                        }
+				    }
 				
-				# set index [expr $index - 1]
-				# if { $index >= 0 && [llength $routers] > $index} {
-					# return [lindex $routers $index]
-				# }
-			}			
-			return ""		
-		}
+				}			
+			    return ""	
+            }
+		
+    	}
 		ldp {
-			set protocols [ixNet getL $parentHnd protocols]
-			set protocol [ixNet getL $protocols ldp]
-			if { [ ixNet getA $protocol -enabled ] } {
-				set routers [ixNet getL $protocol router]
-				foreach router $routers {
-					if { $router == $handle } {
-						return $handle
-					} 
-				}
-				
-				# set index [expr $index - 1]
-				# if { $index >= 0 && [llength $routers] > $index} {
-					# return [lindex $routers $index]
-				# }
-			}			
-			return ""		
-		}
+		    #set ngpfMode 0
+		    if {$ngpfMode != 0} {
+		        set topoObjList [ixNet getL [ixNet getRoot] topology]
+		        if { [ llength $topoObjList ] != 0 } {
+		            foreach topoObj $topoObjList {
+		                set deviceGroupList [ixNet getL $topoObj deviceGroup]
+		                foreach deviceObj $deviceGroupList {
+		                    set ethernetObjList [ixNet getL $deviceObj ethernet]
+                            foreach ethernetObj $ethernetObjList {
+							    set ipv4ObjList [ixNet getL $ethernetObj ipv4]
+                                set ipv6ObjList [ixNet getL $ethernetObj ipv6]
+                                if { [ llength $ipv4ObjList ] != 0 } {
+                                    foreach ipv4Obj $ipv4ObjList {
+                                        set ldpObj [ixNet getL $ipv4Obj ldpBasicRouter ]
+                                        if { $ldpObj == $handle } {
+                                            return $handle
+                                        }
+                                    }
+                                }
+								if { [ llength $ipv6ObjList ] != 0 } {
+                                    foreach ipv6Obj $ipv6ObjList {
+                                        set ldpObj [ixNet getL $ipv6Obj ldpBasicRouterV6]
+                                        if { $ldpObj == $handle } {
+                                            return $handle
+                                        }
+                                        #if {[ixNet getA [ixNet getA $router -interfaces] -description] == $handle} {
+                                        #    return $router
+                                        #}
+                                    }
+                                }
+                            }
+                        }
+		            }
+				}	
+           					
+                return ""
+            } else {
+			    set protocols [ixNet getL $parentHnd protocols]
+				set protocol [ixNet getL $protocols ldp]
+				if { [ ixNet getA $protocol -enabled ] } {
+  				    set routers [ixNet getL $protocol router]
+			  	    foreach router $routers {
+					    if { $router == $handle } {
+						    return $handle
+					    } 
+				    }
+		
+			    }			
+			    return ""	
+            }
+		
+    	}
+		
 		ospfv2 {
 			
             set protocols [ixNet getL $parentHnd protocols]
@@ -1829,6 +1901,26 @@ if {$ngpfMode != 0} {
 			puts "load package fail...$err $tbcErr"
 		}
 	}
+	puts "load package Ixia_NetNgpfIsis..."
+	if { [ catch {
+		source [file join $currDir Ixia_NetNgpfIsis.tcl]
+	} err ] } {
+		if { [ catch {
+				source [file join $currDir Ixia_NetNgpfIsis.tbc]
+		} tbcErr ] } {
+			puts "load package fail...$err $tbcErr"
+		}
+	} 
+	puts "load package Ixia_NetNgpfLdp..."
+	if { [ catch {
+		source [file join $currDir Ixia_NetNgpfLdp.tcl]
+	} err ] } {
+		if { [ catch {
+				source [file join $currDir Ixia_NetNgpfLdp.tbc]
+		} tbcErr ] } {
+			puts "load package fail...$err $tbcErr"
+		}
+	} 
 	# puts "load package Ixia_NetRfc2544..."
 	# if { [ catch {
 	# 	source [file join $currDir Ixia_NetRFC2544.tcl]
