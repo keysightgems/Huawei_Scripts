@@ -810,7 +810,6 @@ body Port::config { args } {
             -location {
                 set location $value
             }
-            ## DONE
             -intf_ip {
                 if { $value != "" } {
                 	if { [ IsIPv4Address $value ] } {
@@ -1174,11 +1173,6 @@ body Port::config { args } {
         }
     }
 
-	# set newtopoObj  [ ixNet add $handle topology ]
-    # Deputs "added topology value $newtopoObj for port handle $handle"
-	# ixNet commit
-	# set newtopoObj [ixNet remapIds $newtopoObj]
-	 	# set newtopoObj [ixNet add [ixNet getRoot] topology -vports $handle]
 	for { set index 0 } { $index < $intf_num } { incr index } {
         set deviceGroupObj [ixNet add [lindex $topoObj end] deviceGroup]
         ixNet commit
@@ -1236,8 +1230,6 @@ body Port::config { args } {
                         set ipv6Obj [ lindex [ ixNet getList $ethObj ipv6 ] 0 ]
                     }
                     set ipv6Obj [ixNet remapIds $ipv6Obj]
-                    #ixNet setA [ixNet getA $ipv6Obj -address]/singleValue -value $ipv6_addr
-                    #ixNet setA [ixNet getA $ipv6Obj -prefix]/singleValue -value $ipv6_mask
                     ixNet setA [ixNet getA $ipv6Obj -address]/counter -start $ipv6_addr
 
                     if {[info exists ipv6_addr_step] && $ipv6_addr_step != ""} {
@@ -1280,7 +1272,6 @@ body Port::config { args } {
                     ixNet setA [ixNet getA $ipv4Obj -prefix]/counter -start $mask
                     ixNet commit
                     lappend intf_ipv4 $intf_ip
-                    # set intf_ip [ IncrementIPAddr $intf_ip $intf_ip_mod $intf_ip_step ]
                     Deputs "int_ip: $intf_ip"
                 }
                 Deputs "set dut ipv4 address..."
@@ -1299,7 +1290,6 @@ body Port::config { args } {
 
                     ixNet setA [ixNet getA $ipv4Obj -prefix]/counter -start $mask
                     ixNet commit
-                    # set dut_ip [ IncrementIPAddr $dut_ip $dut_ip_mod $dut_ip_step ]
                     Deputs "dut_ip: $dut_ip"
                 }
             }
@@ -1314,7 +1304,6 @@ body Port::config { args } {
                 ixNet setA $ethObj -vlanCount $inner_vlan_num
                 ixNet commit
 
-                # set innerVlanIndex [expr $inner_vlan_num -1]
                 set innerVlanHandle [lindex [ixNet getL $ethObj vlan] [expr $inner_vlan_num -1]]
                 ixNet setA [ixNet getA $innerVlanHandle -vlanId]/counter -start $inner_vlan_id
                 ixNet setA [ixNet getA $innerVlanHandle -vlanId]/counter -step $inner_vlan_step
@@ -1339,38 +1328,7 @@ body Port::config { args } {
             ixNet setA [ixNet getA $outerVlanHandle -priority]/singleValue -value $outer_vlan_priority
             ixNet commit
         }
-        # ixNet setA $ethObj -useVlans true
-        # ixNet setA $ethObj -vlanCount $outer_vlan_num
-        # ixNet commit
-        # ixNet setA [ixNet getA $ethObj/vlan:1 -vlanId]/singleValue -value $outer_vlan_id
-
-        # for {set b [expr {$inner_vlan_num +1}]} {$b <= [expr $outer_vlan_num + $inner_vlan_num]} {incr b} {
-        #     ixNet setA [ixNet getA $ethObj/vlan:1 -vlanId]/counter -start $outer_vlan_id
-        #     ixNet setA [ixNet getA $ethObj/vlan:1 -vlanId]/counter -step $inner_vlan_step
-        #     ixNet setA [ixNet getA $ethObj/vlan:1 -vlanId]/counter -direction increment
-        #     ixNet commit
-        # }
-        # ixNet setA $vlan -vlanId $outer_vlan_id
-        # ixNet setA $vlan -priority $outer_vlan_priority
     }
-    # if { $flagInnerVlan } {
-    #     # foreach int $interface 
-    #         # if { [ llength [ixNet getL $int vlan] ] > 0 } {
-    #         #     set vlan [ lindex [ixNet getL $int vlan] 0 ]
-    #         # } else {
-    #         #     set vlan [ ixNet add $int vlan ]
-    #         # }
-    #         if {[llength [ixNet getL $ethObj vlan]]} {
-    #             set vlan [ lindex [ixNet getL $ethObj vlan] 0 ]
-    #         } else {
-    #             set vlan [ ixNet add $ethObj vlan ]
-    #         }
-           
-    #         Deputs "vlan handle at inner $vlan"
-    #         # ixNet setM $vlan \
-    #         ixNet setA [ixNet getA $vlan -vlanId]/singleValue -value $inner_vlan_id
-    #         ixNet setA [ixNet getA $vlan -priority]/singleValue -value $inner_vlan_priority
-    # }
     ixNet commit    
     
     if { [ info exists type ] } {
