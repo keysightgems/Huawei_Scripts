@@ -316,7 +316,7 @@ set assign_realportList ""
 set enx_portNameList ""
 set enx_portLocationList ""
 #Anish(Have to get this from Env variable)
-set ngpfMode 0
+set ngpfMode 1
 global ngpfMode
 
 proc GetEnxInfo { args } {
@@ -335,6 +335,22 @@ proc GetEnxInfo { args } {
         }
     }
 
+}
+proc GetOspfRouterHandle {handle {option 0}} {
+    set result [regexp {(.*)(topology:[0-9]+)/(deviceGroup:[0-9]+).*([0-9]):(.*)$} $handle match match1 match2 match3 match4]
+	set devHandle [join $match1/$match2/$match3]
+	Deputs "devHandle:$devHandle"
+	if {$match4 == 2} {
+        set returnHandle [ixNet getL $devHandle ospfv2Router]
+		set version 2
+    } elseif {$match4 == 3}  {
+		set returnHandle [ixNet getL $devHandle ospfv3Router]
+		set version 3
+	}
+	if {$option != 0} {
+		return $version
+	}
+		return $returnHandle
 }
 proc loadconfig { filename } {
     global portlist
@@ -527,7 +543,6 @@ proc initLoadObjects {} {
     foreach tname $trafficnamelist tobj $trafficlist tport $tportlist {
         Traffic $tname $tport $tobj
     }
-    
     
 }
 
@@ -1648,17 +1663,17 @@ if {$ngpfMode != 0} {
 			puts "load package fail...$err $tbcErr"
 		}
 	} 
-	# puts "load package Ixia_NetTester..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetTester.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetTester.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	puts "load package Ixia_NetPort..."
+	puts "load package Ixia_NetNgpfTester..."
+	if { [ catch {
+		source [file join $currDir Ixia_NetNgpfTester.tcl]
+	} err ] } {
+     	if { [ catch {
+	 			source [file join $currDir Ixia_NetNgpfTester.tbc]
+	 	} tbcErr ] } {
+	 		puts "load package fail...$err $tbcErr"
+	 	}
+	}
+	puts "load package Ixia_NetNgpfPort..."
 	if { [ catch {
 		source [file join $currDir Ixia_NetNgpfPort.tcl]
 	} err ] } {
@@ -1668,78 +1683,77 @@ if {$ngpfMode != 0} {
 			puts "load package fail...$err $tbcErr"
 		}
 	} 
-	# puts "load package Ixia_NetTraffic..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetTraffic.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetTraffic.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# }
-	# puts "load package Ixia_NetFlow..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetFlow.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_N
-	#etFlow.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetDhcp..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetDhcp.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetDhcp.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# }
-	# puts "load package Ixia_NetDhcpPD..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetDhcpPD.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetDhcpPD.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetIgmp..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetIgmp.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetIgmp.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetCapture..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetCapture.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetCapture.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetCaptureFilter..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetCaptureFilter.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetCaptureFilter.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	puts "load package Ixia_NetOspf..."
+	puts "load package Ixia_NetNgpfTraffic..."
+	if { [ catch {
+		source [file join $currDir Ixia_NetNgpfTraffic.tcl]
+	} err ] } {
+		if { [ catch {
+				source [file join $currDir Ixia_NetNgpfTraffic.tbc]
+	 	} tbcErr ] } {
+	 		puts "load package fail...$err $tbcErr"
+	 	}
+	}
+	puts "load package Ixia_NetNgpfFlow..."
+	if { [ catch {
+	 	source [file join $currDir Ixia_NetNgpfFlow.tcl]
+	} err ] } {
+	 	if { [ catch {
+	 			source [file join $currDir Ixia_NetNgpfFlow.tbc]
+	 	} tbcErr ] } {
+	 		puts "load package fail...$err $tbcErr"
+	 	}
+	}
+	puts "load package Ixia_NetNgpfDhcp..."
+	if { [ catch {
+	 	source [file join $currDir Ixia_NetNgpfDhcp.tcl]
+	} err ] } {
+	 	if { [ catch {
+	 			source [file join $currDir Ixia_NetNgpfDhcp.tbc]
+	 	} tbcErr ] } {
+	 		puts "load package fail...$err $tbcErr"
+	 	}
+	}
+	puts "load package Ixia_NetNgpfDhcpPD..."
+	if { [ catch {
+	 	source [file join $currDir Ixia_NetNgpfDhcpPD.tcl]
+	} err ] } {
+	 	if { [ catch {
+	 			source [file join $currDir Ixia_NetNgpfDhcpPD.tbc]
+	 	} tbcErr ] } {
+	 		puts "load package fail...$err $tbcErr"
+	 	}
+	}
+	puts "load package Ixia_NetNgpfIgmp..."
+	if { [ catch {
+	 	source [file join $currDir Ixia_NetNgpfIgmp.tcl]
+	} err ] } {
+	 	if { [ catch {
+	 			source [file join $currDir Ixia_NetNgpfIgmp.tbc]
+	 	} tbcErr ] } {
+	 		puts "load package fail...$err $tbcErr"
+	 	}
+	}
+	puts "load package Ixia_NetNgpfCapture..."
+	if { [ catch {
+	 	source [file join $currDir Ixia_NetNgpfCapture.tcl]
+	} err ] } {
+	 	if { [ catch {
+	 			source [file join $currDir Ixia_NetNgpfCapture.tbc]
+	 	} tbcErr ] } {
+	 		puts "load package fail...$err $tbcErr"
+	 	}
+	}
+	puts "load package Ixia_NetNgpfCaptureFilter..."
+	if { [ catch {
+	 	source [file join $currDir Ixia_NetNgpfCaptureFilter.tcl]
+	} err ] } {
+	 	if { [ catch {
+	 			source [file join $currDir Ixia_NetNgpfCaptureFilter.tbc]
+	 	} tbcErr ] } {
+	 		puts "load package fail...$err $tbcErr"
+	 	}
+	}
+	puts "load package Ixia_NetNgpfOspf..."
 	if { [ catch {
 	 	source [file join $currDir Ixia_NetNgpfOspf.tcl]
 	} err ] } {
@@ -1749,77 +1763,77 @@ if {$ngpfMode != 0} {
 	 		puts "load package fail...$err $tbcErr"
 	 	}
 	 }
-	# puts "load package Ixia_NetL3Vpn6Vpe..." 
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetL3Vpn6Vpe.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetL3Vpn6Vpe.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetLdp..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetLdp.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetLdp.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetIsis..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetIsis.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetIsis.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetTrill..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetTrill.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetTrill.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetDcbx..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetDcbx.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetDcbx.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetFcoe..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetFcoe.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetFcoe.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetPPPoX..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetPPPoX.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetPPPoX.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	puts "load package Ixia_NetBgp..."
+	puts "load package Ixia_NetNgpfL3Vpn6Vpe..."
+	if { [ catch {
+	 	source [file join $currDir Ixia_NetNgpfL3Vpn6Vpe.tcl]
+	} err ] } {
+	 	if { [ catch {
+	 			source [file join $currDir Ixia_NetNgpfL3Vpn6Vpe.tbc]
+	 	} tbcErr ] } {
+	 		puts "load package fail...$err $tbcErr"
+	 	}
+	}
+	puts "load package Ixia_NetNgpfLdp..."
+	if { [ catch {
+	 	source [file join $currDir Ixia_NetNgpfLdp.tcl]
+	} err ] } {
+	 	if { [ catch {
+	 			source [file join $currDir Ixia_NetNgpfLdp.tbc]
+	 	} tbcErr ] } {
+	 		puts "load package fail...$err $tbcErr"
+	 	}
+	}
+	puts "load package Ixia_NetNgpfIsis..."
+	if { [ catch {
+	 	source [file join $currDir Ixia_NetNgpfIsis.tcl]
+	} err ] } {
+	 	if { [ catch {
+	 			source [file join $currDir Ixia_NetNgpfIsis.tbc]
+	 	} tbcErr ] } {
+	 		puts "load package fail...$err $tbcErr"
+	 	}
+	}
+	puts "load package Ixia_NetNgpfTrill..."
+	if { [ catch {
+	 	source [file join $currDir Ixia_NetNgpfTrill.tcl]
+	} err ] } {
+	 	if { [ catch {
+	 			source [file join $currDir Ixia_NetNgpfTrill.tbc]
+	 	} tbcErr ] } {
+	 		puts "load package fail...$err $tbcErr"
+	 	}
+	}
+	puts "load package Ixia_NetNgpfDcbx..."
+	if { [ catch {
+	 	source [file join $currDir Ixia_NetNgpfDcbx.tcl]
+	} err ] } {
+		if { [ catch {
+	 			source [file join $currDir Ixia_NetNgpfDcbx.tbc]
+	 	} tbcErr ] } {
+	 		puts "load package fail...$err $tbcErr"
+	 	}
+	}
+	puts "load package Ixia_NetNgpfFcoe..."
+	if { [ catch {
+	 	source [file join $currDir Ixia_NetNgpfFcoe.tcl]
+	} err ] } {
+	 	if { [ catch {
+	 			source [file join $currDir Ixia_NetNgpfFcoe.tbc]
+	 	} tbcErr ] } {
+	 		puts "load package fail...$err $tbcErr"
+	 	}
+	}
+	puts "load package Ixia_NetNgpfPPPoX..."
+	if { [ catch {
+	 	source [file join $currDir Ixia_NetNgpfPPPoX.tcl]
+	} err ] } {
+	 	if { [ catch {
+	 			source [file join $currDir Ixia_NetNgpfPPPoX.tbc]
+	 	} tbcErr ] } {
+	 		puts "load package fail...$err $tbcErr"
+	 	}
+	}
+	puts "load package Ixia_NetNgpfBgp..."
 	if { [ catch {
 		source [file join $currDir Ixia_NetNgpfBgp.tcl]
 	} err ] } {
@@ -1829,87 +1843,97 @@ if {$ngpfMode != 0} {
 			puts "load package fail...$err $tbcErr"
 		}
 	}
-	# puts "load package Ixia_NetRfc2544..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetRFC2544.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetRFC2544.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetRfc3918..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetRFC3918.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetRFC3918.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# }
-	# puts "load package Ixia_NetDot1xRate..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetDot1xRate.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetDot1xRate.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetRip..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetRip.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetRip.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetPim...."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetPim.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetPim.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetBfd...."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetBfd.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetBfd.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetDeviceGroup...."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetDeviceGroup.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetDeviceGroup.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# }
+	puts "load package Ixia_NetNgpfRFC2544..."
+	if { [ catch {
+	 	source [file join $currDir Ixia_NetNgpfRFC2544.tcl]
+	} err ] } {
+	 	if { [ catch {
+	 			source [file join $currDir Ixia_NetNgpfRFC2544.tbc]
+	 	} tbcErr ] } {
+	 		puts "load package fail...$err $tbcErr"
+	 	}
+	}
+	puts "load package Ixia_NetNgpfRFC3918..."
+	if { [ catch {
+	 	source [file join $currDir Ixia_NetNgpfRFC3918.tcl]
+	} err ] } {
+	 	if { [ catch {
+	 			source [file join $currDir Ixia_NetNgpfRFC3918.tbc]
+	 	} tbcErr ] } {
+	 		puts "load package fail...$err $tbcErr"
+	 	}
+	}
+	puts "load package Ixia_NetNgpfDot1xRate..."
+	if { [ catch {
+	 	source [file join $currDir Ixia_NetNgpfDot1xRate.tcl]
+	} err ] } {
+	 	if { [ catch {
+	 			source [file join $currDir Ixia_NetNgpfDot1xRate.tbc]
+	 	} tbcErr ] } {
+	 		puts "load package fail...$err $tbcErr"
+	 	}
+	}
+	puts "load package Ixia_NetNgpfRip..."
+	if { [ catch {
+	 	source [file join $currDir Ixia_NetNgpfRip.tcl]
+	} err ] } {
+	 	if { [ catch {
+	 			source [file join $currDir Ixia_NetNgpfRip.tbc]
+	 	} tbcErr ] } {
+	 		puts "load package fail...$err $tbcErr"
+	 	}
+	}
+	puts "load package Ixia_NetNgpfPim...."
+	if { [ catch {
+	 	source [file join $currDir Ixia_NetNgpfPim.tcl]
+	} err ] } {
+	 	if { [ catch {
+				source [file join $currDir Ixia_NetNgpfPim.tbc]
+	 	} tbcErr ] } {
+	 		puts "load package fail...$err $tbcErr"
+	 	}
+	}
+	puts "load package Ixia_NetNgpfBfd...."
+	if { [ catch {
+	 	source [file join $currDir Ixia_NetNgpfBfd.tcl]
+	} err ] } {
+	 	if { [ catch {
+	 			source [file join $currDir Ixia_NetNgpfBfd.tbc]
+	 	} tbcErr ] } {
+	 		puts "load package fail...$err $tbcErr"
+	 	}
+	}
+	puts "load package Ixia_NetNgpfDeviceGroup...."
+	if { [ catch {
+	 	source [file join $currDir Ixia_NetNgpfDeviceGroup.tcl]
+	} err ] } {
+	 	if { [ catch {
+	 			source [file join $currDir Ixia_NetNgpfDeviceGroup.tbc]
+	 	} tbcErr ] } {
+	 		puts "load package fail...$err $tbcErr"
+	 	}
+	}
 
-	# puts "load package Ixia_NetL2TP..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetL2TP.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetL2TP.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
+	puts "load package Ixia_NetNgpfL2TP..."
+	if { [ catch {
+	 	source [file join $currDir Ixia_NetNgpfL2TP.tcl]
+	} err ] } {
+	 	if { [ catch {
+	 			source [file join $currDir Ixia_NetNgpfL2TP.tbc]
+	 	} tbcErr ] } {
+	 		puts "load package fail...$err $tbcErr"
+	 	}
+	}
+	puts "load package IxiaNgpfNet..."
+	if { [ catch {
+	 	source [file join $currDir IxiaNgpfNet.tcl]
+	} err ] } {
+	 	if { [ catch {
+	 			source [file join $currDir IxiaNgpfNet.tbc]
+	 	} tbcErr ] } {
+	 		puts "load package fail...$err $tbcErr"
+	 	}
+	}
 } else {
 	
 	puts "load package Ixia_Util..."
