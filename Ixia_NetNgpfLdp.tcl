@@ -52,6 +52,7 @@ Deputs "----- TAG: $tag -----"
     set vportList [ixNet getL [ixNet getRoot] vport]
     set vport [ lindex $vportList end ]
     if {[llength $topoObjList] != [llength $vportList]} {
+		 puts "inside the first tolo and vport check >>> >>>>"
 
         foreach topoObj $topoObjList {
             set vportObj [ixNet getA $topoObj -vports]
@@ -75,6 +76,7 @@ Deputs "----- TAG: $tag -----"
 	set topoObjList [ixNet getL [ixNet getRoot] topology]
 
     if { [ llength $topoObjList ] == 0 } {
+	 puts "inside the llenth zero >>>>"
         set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
         set deviceGroupObj [ixNet add $topoObj deviceGroup]
         set ethernetObj [ixNet add $deviceGroupObj ethernet]
@@ -102,6 +104,7 @@ Deputs "----- TAG: $tag -----"
         ixNet commit
         array set routeBlock [ list ]
     } else {
+	    puts "inside the esle >>>>"
         foreach topoObj $topoObjList {
             set vportObj [ixNet getA $topoObj -vports]
             if {$vportObj == $hPort} {
@@ -145,6 +148,7 @@ Deputs "----- TAG: $tag -----"
                                 }
                             }
                         } elseif { $ip_version == "ipv6" } {
+						puts "ip_version ::$ip_version >>>>>>"
                             set ipv6Obj [ixNet getL $ethernetObj ipv6]
                             if { [llength $ipv6Obj] == 0 } {
                                 set ipv6Obj [ixNet add $ethernetObj ipv6]
@@ -194,6 +198,25 @@ Deputs "----- TAG: $tag -----"
 	method get_status {} {}
 	method get_stats {} {}
 
+	method generate_interface { args } {
+		set tag "body LdpSession::generate_interface [info script]"
+        Deputs "----- TAG: $tag -----"
+		foreach int $rb_interface {
+		
+			if { [ ixNet getA $int -type ] == "routed" } {
+				continue
+			}
+		
+			set hInt [ ixNet add $handle interface ]
+			ixNet setM $hInt -protocolInterface $int -enabled True
+			
+			ixNet commit
+			set hInt [ ixNet remapIds $hInt ]
+
+			set interface($int) $hInt	
+		}
+        Deputs "interface: [array get interface]"
+	}	
 }
 
 body LdpSession::config { args } {
@@ -288,6 +311,7 @@ body LdpSession::config { args } {
                 set ethernetObj [ixNet getL $deviceGroupObj ethernet]
 					set ipv4Obj [ixNet getL $ethernetObj ipv4]
 				    set ipv6Obj [ixNet getL $ethernetObj ipv6]
+                    puts "ipv4Obj :: $ipv4Obj , ipv6Obj :: $ipv6Obj >>>"
                 		
 					if { [ info exists ip_version ] } {
 		                if { [ string tolower $ip_version ] == "ipv6" } {
@@ -298,10 +322,6 @@ body LdpSession::config { args } {
 							set ldpv6Interface [ixNet getL $ipv6Obj ldpv6ConnectedInterface]
 							if {$ldpv6Interface == ""} {
 							    set ldpv6Interface [ixNet add $ipv6Handle ldpv6ConnectedInterface]
-								ixNet commit
-								set ldpv6Interface [ ixNet remapIds $ldpv6Interface ]
-
-
 	                        }
 							
 		                } elseif {[ string tolower $ip_version ] == "ipv4" } {
@@ -312,9 +332,6 @@ body LdpSession::config { args } {
 						    set ldpv4Interface [ixNet getL $ipv4Obj ldpConnectedInterface ]
 	                        if {$ldpv4Interface == ""} {
 	                             set ldpv4Interface [ixNet add $ipv4Obj ldpConnectedInterface ]
-							     ixNet commit
-								set ldpv4Interface [ ixNet remapIds $ldpv4Interface ]
-
 	                        }
 
 		                }
