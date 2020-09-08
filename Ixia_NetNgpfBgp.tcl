@@ -191,6 +191,9 @@ body BgpSession::reborn { {version ipv4}  } {
             if {$vportObj != $vport && $vport == $hPort} {
                 set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
                 set deviceGroupObj [ixNet add $topoObj deviceGroup]
+                ixNet commit
+                ixNet setA $deviceGroupObj -multiplier 1
+                ixNet commit
                 set ethernetObj [ixNet add $deviceGroupObj ethernet]
                 ixNet commit
                 if { $ip_version == "ipv4" } {
@@ -210,6 +213,9 @@ body BgpSession::reborn { {version ipv4}  } {
     if { [ llength $topoObjList ] == 0 } {
         set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
         set deviceGroupObj [ixNet add $topoObj deviceGroup]
+        ixNet commit
+        ixNet setA $deviceGroupObj -multiplier 1
+        ixNet commit
         set ethernetObj [ixNet add $deviceGroupObj ethernet]
         if { $ip_version == "ipv4" } {
             set ipv4Obj [ixNet add $ethernetObj ipv4]
@@ -263,6 +269,7 @@ body BgpSession::reborn { {version ipv4}  } {
                                         }
                                     }
                                 } else {
+									set bgpObj [ixNet getL $ipv4Obj bgpIpv4Peer]
                                     if { [llength $bgpObj] == 0 } {
                                         set bgpObj [ixNet add $ipv4Obj bgpIpv4Peer]
                                         ixNet commit
@@ -284,6 +291,7 @@ body BgpSession::reborn { {version ipv4}  } {
                                     set bgpObj [ ixNet remapIds $bgpObj ]
                                 }
                             } else {
+								set bgpObj [ixNet getL $ipv6Obj bgpIpv6Peer]
                                 if { [llength $bgpObj] == 0 } {
                                     set bgpObj [ixNet add $ipv6Obj bgpIpv6Peer]
                                     ixNet commit
