@@ -293,12 +293,7 @@ proc GetValidNgpfHandleObj { objType handle { parentHnd "" } } {
 			foreach router $routers {
                 if { $router == $handle } {
                     return $handle
-                } 
-				if {$ngpfMode == 0} {
-                	if {[ixNet getA $router -networkAddress]  == $handle} {
-                    	return $router
-                	}
-				}
+                } 				
             }
 			return ""
 		}
@@ -670,7 +665,47 @@ proc GetValidNgpfHandleObj { objType handle { parentHnd "" } } {
 	}
     return ""
 }
-
+#We will add leftover packages once implemented for NGPF
+puts "load package Ixia_Util..."
+if { [ catch {
+	source [file join $currDir Ixia_Util.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_Util.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+} 
+puts "load package Ixia_NetObj..."
+if { [ catch {
+	source [file join $currDir Ixia_NetObj.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetObj.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+} 	
+puts "load package Ixia_NetNgpfPort..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfPort.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetNgpfPort.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+} 	
+puts "load package Ixia_NetNgpfBgp..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfBgp.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetNgpfBgp.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+}
 
 
 #IxDebugOn
