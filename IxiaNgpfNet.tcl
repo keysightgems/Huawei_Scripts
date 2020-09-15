@@ -36,6 +36,13 @@ proc GetOspfNgpfRouterHandle {handle {option 0}} {
 		return $returnHandle
 }
 
+proc GetDeviceNgpfHandle {handle} {
+    set result [regexp {(.*)(topology:[0-9]+)/(deviceGroup:[0-9]+).*([0-9]):(.*)$} $handle match match1 match2 match3 match4]
+	set devHandle [join $match1/$match2/$match3]
+	Deputs "devHandle:$devHandle"
+	return $devHandle
+}
+
 proc GenerateProtocolsNgpfObjects { portObj } {
     set tag "body Port::gen_pro_objs [info script]"
     Deputs "----- TAG: $tag -----"
@@ -676,12 +683,12 @@ if { [ catch {
 		puts "load package fail...$err $tbcErr"
 	}
 } 
-puts "load package Ixia_NetObj..."
+puts "load package Ixia_NetNgpfObj..."
 if { [ catch {
-	source [file join $currDir Ixia_NetObj.tcl]
+	source [file join $currDir Ixia_NetNgpfObj.tcl]
 } err ] } {
 	if { [ catch {
-			source [file join $currDir Ixia_NetObj.tbc]
+			source [file join $currDir Ixia_NetNgpfObj.tbc]
 	} tbcErr ] } {
 		puts "load package fail...$err $tbcErr"
 	}
@@ -702,6 +709,16 @@ if { [ catch {
 } err ] } {
 	if { [ catch {
 			source [file join $currDir Ixia_NetNgpfBgp.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+}
+puts "load package Ixia_NetNgpfOspf..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfOspf.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetNgpfOspf.tbc]
 	} tbcErr ] } {
 		puts "load package fail...$err $tbcErr"
 	}
