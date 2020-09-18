@@ -36,11 +36,18 @@ proc GetOspfNgpfRouterHandle {handle {option 0}} {
 		return $returnHandle
 }
 
-proc GetDeviceNgpfHandle {handle} {
+proc GetDependentNgpfProtocolHandle {handle option} {
     set result [regexp {(.*)(topology:[0-9]+)/(deviceGroup:[0-9]+).*([0-9]):(.*)$} $handle match match1 match2 match3 match4]
 	set devHandle [join $match1/$match2/$match3]
-	Deputs "devHandle:$devHandle"
-	return $devHandle
+	if {$option == "deviceGroup"} {
+		return $devHandle
+	} elseif {$option == "networkGroup"} {
+		set networkGroupHandles [ixNet getL devHandle "networkGroup"]
+		return $networkGroupHandles
+	} elseif {$option == "isisL3Router"} {
+		set isisHandle [ixNet getL $devicehandle isisL3Router]
+		return isisHandle
+	}
 }
 
 proc GenerateProtocolsNgpfObjects { portObj } {
