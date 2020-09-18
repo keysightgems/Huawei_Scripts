@@ -15,9 +15,7 @@ class OspfSession {
 	public variable hNetworkRange
 	public variable hNetworkGroup
     public variable OspfVersion
-	public variable deviceHandle
-    set devicehandle ""
-    global devicehandle
+
     constructor { port { hOspfSession NULL } } {
 		global errNumber
 		
@@ -277,8 +275,8 @@ body OspfSession::advertise_topo {} {
 
 	set tag "body OspfSession::advertise_topo [info script]"
 Deputs "----- TAG: $tag -----"
-    set deviceGroupObj [$this cget -deviceHandle]
-	foreach route [ ixNet getL $deviceGroupObj networkGroup ] {
+    set deviceGroupObj [GetDependentNgpfProtocolHandle $handle "deviceGroup"]
+    foreach route [ ixNet getL $deviceGroupObj networkGroup ] {
 	    ixNet setA [ixNet getA $route -enabled]/singleValue -value True
 	}
 
@@ -289,7 +287,7 @@ body OspfSession::withdraw_topo {} {
 
 	set tag "body OspfSession::withdraw_topo [info script]"
 Deputs "----- TAG: $tag -----"
-    set deviceGroupObj [$this cget -deviceHandle]
+    set deviceGroupObj [GetDependentNgpfProtocolHandle $handle "deviceGroup"]
     foreach route [ ixNet getL $deviceGroupObj networkGroup ] {
 	
 		ixNet setA [ixNet getA $route -enabled]/singleValue -value False
@@ -316,7 +314,7 @@ Deputs "----- TAG: $tag -----"
 			}
 		}
 	}
-	set deviceGroupObj [$this cget -deviceHandle]
+	set deviceGroupObj [GetDependentNgpfProtocolHandle $handle "deviceGroup"]
 	for { set index 0 } { $index < $times } { incr index } {
 		foreach route [ ixNet getL $deviceGroupObj networkGroup ] {
 		    ixNet setA [ixNet getA $route -enabled]/singleValue -value True
@@ -339,7 +337,7 @@ body OspfSession::set_topo {args} {
 	
 	set tag "body OspfSession::set_topo [info script]"
 Deputs "----- TAG: $tag -----"
-    set deviceGroupObj [$this cget -deviceHandle]
+    set deviceGroupObj [GetDependentNgpfProtocolHandle $handle "deviceGroup"]
 	set hRouter $handle
 	set hNetworkGroup [ixNet add $deviceGroupObj networkGroup]
 	ixNet commit
@@ -453,7 +451,6 @@ Deputs "----- TAG: $tag -----"
 		ixNet setA $handle -name $this
         Deputs "handleospf:$handle"
 		set protocol ospf
-		$this configure -deviceHandle $deviceGroupObj
 	}
 
 	method config { args } {}
@@ -988,8 +985,7 @@ Deputs "----- TAG: $tag -----"
 		ixNet commit
 		set handle [ ixNet remapIds $ospfv3Obj ]
 		ixNet setA $handle -name $this
-		$this configure -deviceHandle $deviceGroupObj
-        Deputs "handlev3ospf:$handle"
+		Deputs "handlev3ospf:$handle"
 		set protocol ospfV3
  		generate_interface	
 	}
@@ -1507,7 +1503,7 @@ class SimulatedSummaryRoute {
 		global errNumber
 	    
 		set tag "body SimulatedSummaryRoute::ctor [info script]"
-Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
 
 		set routerObj [ GetObject $router ]
 		set handle ""
@@ -1517,9 +1513,8 @@ Deputs "----- TAG: $tag -----"
 	
 	method reborn {} {
 		set tag "body SimulatedSummaryRoute::reborn [info script]"
-Deputs "----- TAG: $tag -----"
-        #set deviceGroupObj [$this cget -deviceHandle]
-		if { [ catch {
+        Deputs "----- TAG: $tag -----"
+        if { [ catch {
 			set hRouter   [ $routerObj cget -handle ]
 		} ] } {
 			error "$errNumber(1) Router Object in SimulatedSummaryRoute ctor"
@@ -1530,7 +1525,7 @@ Deputs "----- TAG: $tag -----"
         if {[string first "ospfv3" $hRouter] != -1} {
             set ip_version "ipv6"
         }
-		set deviceGroupObj [GetDeviceNgpfHandle $hRouter]
+		set deviceGroupObj [GetDependentNgpfProtocolHandle $hRouter "deviceGroup"]
 		set hRouteRange [ixNet add $deviceGroupObj "networkGroup"]
         ixNet commit
         set handle [ ixNet remapIds $hRouteRange ]
@@ -1540,16 +1535,22 @@ Deputs "----- TAG: $tag -----"
             set ipv4PoolObj [ixNet add $handle "ipv4PrefixPools"]
             ixNet setM $ipv4PoolObj -addrStepSupported true -name "Basic\ IPv4\ Addresses\ 1"
             ixNet commit
+            set connector [ixNet add $ipv4PoolObj connector]
+            ixNet setA $connector -connectedTo $hRouter
+            ixNet commit
         }
         if {$ip_version == "ipv6"} {
             set ipv6PoolObj [ixNet add $handle "ipv6PrefixPools"]
             ixNet setM $ipv6PoolObj -addrStepSupported true -name "Basic\ IPv6\ Addresses\ 1"
             ixNet commit
+            set connector [ixNet add $ipv6PoolObj connector]
+            ixNet setA $connector -connectedTo $hRouter
+            ixNet commit
         }
-		set portObj [ $routerObj cget -portObj ]
+        set portObj [ $routerObj cget -portObj ]
 		set hPort [ $routerObj cget -hPort ]
-Deputs "portObj:$portObj"
-Deputs "hPort:$hPort"
+    Deputs "portObj:$portObj"
+    Deputs "hPort:$hPort"
 	}
 	method config { args } {}
 	
@@ -1558,14 +1559,14 @@ body SimulatedSummaryRoute::config { args } {
     global errorInfo
     global errNumber
     set tag "body SimulatedSummaryRoute::config [info script]"
-Deputs "----- TAG: $tag -----"
+    Deputs "----- TAG: $tag -----"
 
 	if { $handle == "" } {
 		reborn
 	}
-#param collection
+    #param collection
    
-Deputs "Args:$args "
+    Deputs "Args:$args "
 
     foreach { key value } $args {
         set key [string tolower $key]
@@ -1617,7 +1618,7 @@ Deputs "Args:$args "
 		set step		[ $rb cget -step ]
 		set prefix_len	[ $rb cget -prefix_len ]
 
-Deputs "num:$num start:$start step:$step prefix_len:$prefix_len"
+        Deputs "num:$num start:$start step:$step prefix_len:$prefix_len"
         ixNet setA $handle -multiplier $num
         ixNet setA [ixNet getA $handle -enabled]/singleValue -value True
         ixNet commit
@@ -1696,7 +1697,7 @@ class SimulatedInterAreaRoute {
 		global errNumber
 	    
 		set tag "body SimulatedSummaryRoute::ctor [info script]"
-Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
 
 		set routerObj [ GetObject $router ]
 		if { [ catch {
@@ -1710,28 +1711,31 @@ Deputs "----- TAG: $tag -----"
         if {[string first "ospfv3" $hRouter] != -1} {
             set ip_version "ipv6"
         }
-		set deviceGroupObj [GetDeviceNgpfHandle $hRouter]
+		set deviceGroupObj [GetDependentNgpfProtocolHandle $hRouter "deviceGroup"]
 		set hRouteRange [ixNet add $deviceGroupObj "networkGroup"]
         ixNet commit
         set handle [ ixNet remapIds $hRouteRange ]
-		#set hRouteRange [ixNet add $hRouter routeRange]
-		#ixNet commit
 		ixNet setA [ixNet getA $handle -enabled]/singleValue -value True
 		ixNet commit
 		if {$ip_version == "ipv4"} {
             set ipv4PoolObj [ixNet add $handle "ipv4PrefixPools"]
             ixNet setM $ipv4PoolObj -addrStepSupported true -name "Basic\ IPv4\ Addresses\ 1"
             ixNet commit
+            set connector [ixNet add $ipv4PoolObj connector]
+            ixNet setA $connector -connectedTo $hRouter
+            ixNet commit
         }
         if {$ip_version == "ipv6"} {
             set ipv6PoolObj [ixNet add $handle "ipv6PrefixPools"]
             ixNet setM $ipv6PoolObj -addrStepSupported true -name "Basic\ IPv6\ Addresses\ 1"
             ixNet commit
+            set connector [ixNet add $ipv6PoolObj connector]
+            ixNet setA $connector -connectedTo $hRouter
+            ixNet commit
         }
 		set trafficObj $handle
 	}
-	
-	
+
 	method config { args } {}
 	
 }
@@ -1745,7 +1749,7 @@ class SimulatedLink {
 		global errNumber
 	    
 		set tag "body SimulatedSummaryRoute::ctor [info script]"
-Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
 
 		set routerObj [ GetObject $router ]
 		if { [ catch {
@@ -1759,7 +1763,7 @@ Deputs "----- TAG: $tag -----"
         if {[string first "ospfv3" $hRouter] != -1} {
             set ip_version "ipv6"
         }
-		set deviceGroupObj [GetDeviceNgpfHandle $hRouter]
+		set deviceGroupObj [GetDependentNgpfProtocolHandle $hRouter "deviceGroup"]
 		set hRouteRange [ixNet add $deviceGroupObj "networkGroup"]
         ixNet commit
         set handle [ ixNet remapIds $hRouteRange ]
@@ -1769,10 +1773,16 @@ Deputs "----- TAG: $tag -----"
             set ipv4PoolObj [ixNet add $handle "ipv4PrefixPools"]
             ixNet setM $ipv4PoolObj -addrStepSupported true -name "Basic\ IPv4\ Addresses\ 1"
             ixNet commit
+            set connector [ixNet add $ipv4PoolObj connector]
+            ixNet setA $connector -connectedTo $hRouter
+            ixNet commit
         }
         if {$ip_version == "ipv6"} {
             set ipv6PoolObj [ixNet add $handle "ipv6PrefixPools"]
             ixNet setM $ipv6PoolObj -addrStepSupported true -name "Basic\ IPv6\ Addresses\ 1"
+            ixNet commit
+            set connector [ixNet add $ipv6PoolObj connector]
+            ixNet setA $connector -connectedTo $hRouter
             ixNet commit
         }
 
@@ -1784,10 +1794,10 @@ body SimulatedLink::config { args } {
     global errorInfo
     global errNumber
     set tag "body SimulatedLink::config [info script]"
-Deputs "----- TAG: $tag -----"
+    Deputs "----- TAG: $tag -----"
 
-#param collection
-Deputs "Args:$args "
+    #param collection
+    Deputs "Args:$args "
     foreach { key value } $args {
 	   set key [string tolower $key]
 	   switch -exact -- $key {
@@ -1898,7 +1908,7 @@ class SimulatedRouter {
 		global errNumber
 	    
 		set tag "body SimulatedSummaryRoute::ctor [info script]"
-Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
 
 		set routerObj [ GetObject $router ]
 		if { [ catch {
@@ -1906,21 +1916,19 @@ Deputs "----- TAG: $tag -----"
 		} ] } {
 			error "$errNumber(1) Router Object in SimulatedSummaryRoute ctor"
 		}
-Deputs "hRouter is: $hRouter"
-		set hUserlsagroup [ixNet add $hRouter userLsaGroup]
-		ixNet commit
-		
-		set hUserlsagroup [ ixNet remapIds $hUserlsagroup ]
-		ixNet setA $hUserlsagroup -enalbed True
-		ixNet commit
-	    
-	    set hUserlsa [ixNet add $hUserlsagroup userLsa]
-	    ixNet commit
-	    
-	    set hUserlsa [ ixNet remapIds $hUserlsa ]
-	    ixNet setA $hUserlsa -enalbed True
-	    ixNet commit
-		
+        Deputs "hRouter is: $hRouter"
+
+        set deviceGroupObj [GetDependentNgpfProtocolHandle $hRouter "deviceGroup"]
+        set hNetworkGroup [ixNet add $deviceGroupObj networkGroup]
+        ixNet commit
+        set hNetworkRange [ixNet add $hNetworkGroup networkTopology]
+        ixNet commit
+        set hUserlsa [ ixNet remapIds $hNetworkRange ]
+        set hNetworkGroup [ ixNet remapIds $hNetworkGroup ]
+        #Available options are netTopologyCustom netTopologyFatTree netTopologyGrid netTopologyHubNSpoke netTopologyLinear netTopologyMesh netTopologyRing netTopologyTree
+        set linearTopology [ixNet add $hNetworkRange netTopologyFatTree]
+        ixNet commit
+
 		set trafficObj $hUserlsa
 	}
 	method config { args } {}
@@ -1945,28 +1953,43 @@ Deputs "Args:$args "
 			}
 		}
 	}
-	
+	set simRouterObj [ixNet getL $hUserlsa simRouter]
 	if { [ info exists id ] } {
-		ixNet setA $hUserlsa -advertisingRouterId $id
+	    ixNet setA [ixNet getA $simRouterObj -routerId]/counter -start $id -direction increment -step "0.0.0.1"
 	}
-	
+	set ospfRouterObj [ixNet getL $simRouterObj ospfPseudoRouter]
+	set ospfV3RouterObj [ixNet getL $simRouterObj ospfv3PseudoRouter]
 	if { [ info exists type ] } {
 		switch $type {						
 			abr {
-				ixNet setM $hUserlsa/router -bBit True
+				if {$ospfRouterObj != ""} {
+				    ixNet setA [ixNet getA $ospfRouterObj -bBit]/singleValue -value True
+				}
+				if {$ospfV3RouterObj != ""} {
+				    ixNet setA [ixNet getA $ospfV3RouterObj -bBit]/singleValue -value True
+				}
 			}
 			asbr {
-				ixNet setM $hUserlsa/router -eBit True								
+				if {$ospfRouterObj != ""} {
+				    ixNet setA [ixNet getA $ospfRouterObj -eBit]/singleValue -value True
+				}
+				if {$ospfV3RouterObj != ""} {
+				    ixNet setA [ixNet getA $ospfV3RouterObj -eBit]/singleValue -value True
+				}
 			}	
 			vl {
-				ixNet setM $hUserlsa/router -vBit True
+				#ixNet setM $hUserlsa/router -vBit True
+				Deputs "vBit not available in NGPF"
 			}
 			normal {
-				ixNet setM $hUserlsa/router \
-				-bBit False \
-				-eBit False \
-				-vBit False \
-				-wBit False
+				if {$ospfRouterObj != ""} {
+				    ixNet setA [ixNet getA $ospfRouterObj -bBit]/singleValue -value False
+				    ixNet setA [ixNet getA $ospfRouterObj -eBit]/singleValue -value False
+				}
+				if {$ospfV3RouterObj != ""} {
+				    ixNet setA [ixNet getA $ospfV3RouterObj -bBit]/singleValue -value False
+				    ixNet setA [ixNet getA $ospfV3RouterObj -eBit]/singleValue -value False
+				}
 			}
 		}
 	}
@@ -2000,7 +2023,7 @@ Deputs "----- TAG: $tag -----"
         if {[string first "ospfv3" $hRouter] != -1} {
             set ip_version "ipv6"
         }
-		set deviceGroupObj [GetDeviceNgpfHandle $hRouter]
+		set deviceGroupObj [GetDependentNgpfProtocolHandle $hRouter "deviceGroup"]
 		set hRouteRange [ixNet add $deviceGroupObj "networkGroup"]
         ixNet commit
         set handle [ ixNet remapIds $hRouteRange ]
@@ -2010,10 +2033,16 @@ Deputs "----- TAG: $tag -----"
             set ipv4PoolObj [ixNet add $handle "ipv4PrefixPools"]
             ixNet setM $ipv4PoolObj -addrStepSupported true -name "Basic\ IPv4\ Addresses\ 1"
             ixNet commit
+            set connector [ixNet add $ipv4PoolObj connector]
+            ixNet setA $connector -connectedTo $hRouter
+            ixNet commit
         }
         if {$ip_version == "ipv6"} {
             set ipv6PoolObj [ixNet add $handle "ipv6PrefixPools"]
             ixNet setM $ipv6PoolObj -addrStepSupported true -name "Basic\ IPv6\ Addresses\ 1"
+            ixNet commit
+            set connector [ixNet add $ipv6PoolObj connector]
+            ixNet setA $connector -connectedTo $hRouter
             ixNet commit
         }
 
@@ -2159,7 +2188,7 @@ Deputs "----- TAG: $tag -----"
         if {[string first "ospfv3" $hRouter] != -1} {
             set ip_version "ipv6"
         }
-		set deviceGroupObj [GetDeviceNgpfHandle $hRouter]
+		set deviceGroupObj [GetDependentNgpfProtocolHandle $hRouter "deviceGroup"]
 		set hRouteRange [ixNet add $deviceGroupObj "networkGroup"]
         ixNet commit
         set handle [ ixNet remapIds $hRouteRange ]
@@ -2169,10 +2198,16 @@ Deputs "----- TAG: $tag -----"
             set ipv4PoolObj [ixNet add $handle "ipv4PrefixPools"]
             ixNet setM $ipv4PoolObj -addrStepSupported true -name "Basic\ IPv4\ Addresses\ 1"
             ixNet commit
+            set connector [ixNet add $ipv4PoolObj connector]
+            ixNet setA $connector -connectedTo $hRouter
+            ixNet commit
         }
         if {$ip_version == "ipv6"} {
             set ipv6PoolObj [ixNet add $handle "ipv6PrefixPools"]
             ixNet setM $ipv6PoolObj -addrStepSupported true -name "Basic\ IPv6\ Addresses\ 1"
+            ixNet commit
+            set connector [ixNet add $ipv6PoolObj connector]
+            ixNet setA $connector -connectedTo $hRouter
             ixNet commit
         }
 		
@@ -2325,7 +2360,7 @@ Deputs "----- TAG: $tag -----"
         if {[string first "ospfv3" $hRouter] != -1} {
             set ip_version "ipv6"
         }
-		set deviceGroupObj [GetDeviceNgpfHandle $hRouter]
+		set deviceGroupObj [GetDependentNgpfProtocolHandle $hRouter "deviceGroup"]
 		set hRouteRange [ixNet add $deviceGroupObj "networkGroup"]
         ixNet commit
         set handle [ ixNet remapIds $hRouteRange ]
@@ -2335,10 +2370,16 @@ Deputs "----- TAG: $tag -----"
             set ipv4PoolObj [ixNet add $handle "ipv4PrefixPools"]
             ixNet setM $ipv4PoolObj -addrStepSupported true -name "Basic\ IPv4\ Addresses\ 1"
             ixNet commit
+            set connector [ixNet add $ipv4PoolObj connector]
+            ixNet setA $connector -connectedTo $hRouter
+            ixNet commit
         }
         if {$ip_version == "ipv6"} {
             set ipv6PoolObj [ixNet add $handle "ipv6PrefixPools"]
             ixNet setM $ipv6PoolObj -addrStepSupported true -name "Basic\ IPv6\ Addresses\ 1"
+            ixNet commit
+            set connector [ixNet add $ipv6PoolObj connector]
+            ixNet setA $connector -connectedTo $hRouter
             ixNet commit
         }
 		
@@ -2482,7 +2523,7 @@ Deputs "----- TAG: $tag -----"
         if {[string first "ospfv3" $hRouter] != -1} {
             set ip_version "ipv6"
         }
-		set deviceGroupObj [GetDeviceNgpfHandle $hRouter]
+		set deviceGroupObj [GetDependentNgpfProtocolHandle $hRouter "deviceGroup"]
 		set hRouteRange [ixNet add $deviceGroupObj "networkGroup"]
         ixNet commit
         set handle [ ixNet remapIds $hRouteRange ]
@@ -2492,10 +2533,16 @@ Deputs "----- TAG: $tag -----"
             set ipv4PoolObj [ixNet add $handle "ipv4PrefixPools"]
             ixNet setM $ipv4PoolObj -addrStepSupported true -name "Basic\ IPv4\ Addresses\ 1"
             ixNet commit
+            set connector [ixNet add $ipv4PoolObj connector]
+            ixNet setA $connector -connectedTo $hRouter
+            ixNet commit
         }
         if {$ip_version == "ipv6"} {
             set ipv6PoolObj [ixNet add $handle "ipv6PrefixPools"]
             ixNet setM $ipv6PoolObj -addrStepSupported true -name "Basic\ IPv6\ Addresses\ 1"
+            ixNet commit
+            set connector [ixNet add $ipv6PoolObj connector]
+            ixNet setA $connector -connectedTo $hRouter
             ixNet commit
         }
 		
@@ -2517,14 +2564,11 @@ Deputs "Args:$args "
 		  -age {
 				set age $value
 		  }            
-			-checksum {
+	      -checksum {
 				set checksum $value
 		  }
 		  -metric {
 				set metric $value
-		  }            
-			-route_block {
-				set route_block $value
 		  }
           -route_block {
 				set route_block $value

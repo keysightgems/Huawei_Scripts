@@ -450,14 +450,16 @@ class RouterNgpfEmulationObject {
 	method start {} {
 		set tag "body RouterNgpfEmulationObject::start [info script]"
         Deputs "----- TAG: $tag -----"
-		ixNet exec start $hPort/protocols/$protocol
+		#ixNet exec start $hPort/protocols/$protocol
+		ixNet exec startAllProtocols
 		return [ GetStandardReturnHeader ]
 	}
 	
 	method stop {} {
 		set tag "body BgpSession::start [info script]"
         Deputs "----- TAG: $tag -----"
-		ixNet exec stop $hPort/protocols/$protocol
+		#ixNet exec stop $hPort/protocols/$protocol
+		ixNet exec stopAllProtocols
 		return [ GetStandardReturnHeader ]
 	}
 	

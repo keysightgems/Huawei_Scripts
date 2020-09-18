@@ -14,16 +14,11 @@
 #		4. Add learned filter in reborn
 
 class BgpSession {
-    inherit RouterEmulationObject
+    inherit RouterNgpfEmulationObject
     public variable ip_version
     public variable ipv4_addr
     public variable bgpHandle
-    public variable deviceHandle
-    public variable ethHandle
-    public variable ipv4Handle
-    public variable ipv6Handle
 	public variable version
-    #public variable networkhandle
     constructor { port  { hBgpSession NULL }  } {
 		set tag "body BgpSession::ctor [info script]"
         Deputs "----- TAG: $tag -----"
@@ -31,12 +26,6 @@ class BgpSession {
 		set portObj [ GetObject $port ]
 		set handle ""
 		set bgphandle ""
-		set devicehandle ""
-		set ethhandle ""
-		set ipv4handle ""
-		set ipv6handle ""
-		#set networkhandle ""
-        #set ip_version $version
 		set routeBlock(obj) [list]
 
         set portObj [ GetObject $port ]
@@ -79,7 +68,7 @@ class BgpSession {
 
 
 class SimRoute {
-    inherit RouterEmulationObject
+    inherit RouterNgpfEmulationObject
     public variable  bgpObj
     public variable  hBgp
     public variable  ipv4_addr
@@ -98,13 +87,12 @@ class SimRoute {
         set portObj [ $bgpObj cget -portObj]
         set hPort   [ $bgpObj cget -hPort  ]
 		set handle ""
-        #set ip_version $version
-		set routeBlock(obj) [list]
+        set routeBlock(obj) [list]
           if { $hRouteBlock == "NULL" } {
             set hRouteBlock [GetObjNameFromString $this "NULL"]
         }
         Deputs "----- hRouteBlock: $hRouteBlock, $bgpobj: $hBgp -----"
-        set deviceGroupObj [$bgpObj cget -deviceHandle]
+        set deviceGroupObj [GetDependentNgpfProtocolHandle $hBgp "deviceGroup"]
         if { $hRouteBlock != "NULL" } {
             set handle [GetValidNgpfHandleObj "simroute" $hRouteBlock $deviceGroupObj]
             Deputs "----- handle: $handle -----"
@@ -316,14 +304,7 @@ body BgpSession::reborn { {version ipv4}  } {
         ixNet commit
     }
     $this configure -bgpHandle $bgpObj
-    $this configure -deviceHandle $deviceGroupObj
-    $this configure -ethHandle $ethernetObj
     $this configure -version $ip_version
-    if { $ip_version == "ipv4" } {
-        $this configure -ipv4Handle $ipv4Obj
-    } else {
-        $this configure -ipv6Handle $ipv6Obj
-    }
     set protocol bgp
 }
 
@@ -599,8 +580,7 @@ body BgpSession::set_route { args } {
         }
     }
 
-    set deviceGroup [$this cget -deviceHandle]
-    puts "******************************** deviceGroup obj is :: $deviceGroup"
+    set deviceGroup [GetDependentNgpfProtocolHandle $bgpHandle "deviceGroup"]
 
     if { [ info exists route_block ] } {
 		foreach rb $route_block {
@@ -652,6 +632,9 @@ body BgpSession::set_route { args } {
                     ixNet setM $ipPoolObj -addrStepSupported true -name "Basic\ IPv6\ Addresses\ 1"
 		            ixNet commit
 		        }
+		        set connector [ixNet add $ipPoolObj connector]
+                ixNet setA $connector -connectedTo $bgpHandle
+                ixNet commit
                 ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -start $start -direction increment
                 ixNet commit
             }
@@ -784,15 +767,6 @@ body BgpSession::set_route { args } {
 
             if { $as_path != "" } {
                 #values 1=asset 2=asseq 4=assetconfederation 3=asseqconfederation
-                #set aspathCmd ""
-                #set astype [string tolower $as_path_type ]
-                #switch $astype {
-                #    asset { set as_type "asSet"}
-                #    assequence { set as_type "asSequence"}
-                #    asconfedsequence { set as_type "asConfedSequence"}
-                #    asconfedset { set as_type "asConfedSet"}
-                #}
-                #lappend aspathCmd [list true $as_type $as_path]
                 if { $bgpIpRouteObj != "" } {
                     set bgpAsPathObj [ixNet getL $bgpIpRouteObj bgpAsPathSegmentList]
                     ixNet setA [ixNet getA $bgpAsPathObj -segmentType]/singleValue -value $as_path
@@ -913,7 +887,6 @@ body BgpSession::set_route { args } {
 			$rb configure -portObj $portObj
 			$rb configure -hPort $hPort
 			$rb configure -protocol "bgp"
-			#$rb configure -networkhandle $networkGroupObj
 			$rb enable
 		}
 	}
@@ -945,7 +918,8 @@ body BgpSession::advertise_route { args } {
         ixNet commit
 	} else {
         if { $LoadConfigMode } {
-            set devicehandle [$this cget -deviceHandle]
+            #set devicehandle [$this cget -deviceHandle]
+            set devicehandle [GetDependentNgpfProtocolHandle $bgpHandle "deviceGroup"]
             set routeRangeList  [ixNet getL $devicehandle networkGroup]
             if { $routeRangeList != "" } {
                 foreach rRangeObj $routeRangeList {
@@ -999,10 +973,10 @@ body BgpSession::withdraw_route { args } {
     global errNumber
     global LoadConfigMode
     set tag "body BgpSession::config [info script]"
-Deputs "----- TAG: $tag -----"
+    Deputs "----- TAG: $tag -----"
 
-#param collection
-Deputs "Args:$args "
+    #param collection
+    Deputs "Args:$args "
     foreach { key value } $args {
         set key [string tolower $key]
         switch -exact -- $key {
@@ -1018,7 +992,8 @@ Deputs "Args:$args "
         ixNet commit
 	} else {
          if { $LoadConfigMode } {
-            set devicehandle [$this cget -deviceHandle]
+            #set devicehandle [$this cget -deviceHandle]
+            set devicehandle [GetDependentNgpfProtocolHandle $bgpHandle "deviceGroup"]
             Deputs "devicehandle: $devicehandle"
             set routeRangeList  [ixNet getL $devicehandle networkGroup]
             if { $routeRangeList != "" } {
@@ -1085,7 +1060,6 @@ body BgpSession::get_stats {} {
             set view $viewObj
         }
     }
-    # set view  [ ixNet getF $root/statistics view -caption "Port Statistics" ]
     Deputs "view:$view"
     set captionList             [ ixNet getA $view/page -columnCaptions ]
     Deputs "caption list:$captionList"
@@ -1114,9 +1088,7 @@ body BgpSession::get_stats {} {
         if { [ string length $port ] == 1 } {
             set port "0$port"
         }
-        #if { "${chassis}/${card}/${port}" != [ lindex $row $port_name ] } {
-        #            continue
-        #}
+
         set statsItem   "session_conf"
         set statsVal    [ lindex $row $session_conf ]
         Deputs "stats val:$statsVal"
@@ -1216,27 +1188,7 @@ body SimRoute::config { args } {
     }
 
     set topoObj [ixNet getL [ixNet getRoot] topology]
-    set deviceGroupObj [$bgpObj cget -deviceHandle]
-    set networkGrpList [ixNet getL $deviceGroupObj "networkGroup"]
-    if {$networkGrpList != ""} {
-        Deputs "networkGroupList received not null $networkGrpList"
-        if {$networkGrpList != "" } {
-                foreach networkGrpObj $networkGrpList {
-                    set ipType [$bgpObj cget -version]
-                    if {$ipType == "ipv4"} {
-                        set ipPoolObj [ixNet getL $networkGrpObj "ipv4PrefixPools"]
-                        ixNet setM $ipPoolObj -addrStepSupported true -name "Basic\ IPv4\ Addresses\ 1"
-                        ixNet commit
-                        Deputs "retrieved ipv4 pool and handle is $ipPoolObj"
-                    } elseif {ipType == "ipv6"} {
-                        set ipPoolObj [ixNet add $networkGroupObj "ipv6PrefixPools"]
-                        ixNet setM $ipPoolObj -addrStepSupported true -name "Basic\ IPv6\ Addresses\ 1"
-                        ixNet commit
-                        Deputs "retrieved ipv6 pool and handle is $ipPoolObj"
-                    }
-                }
-        }
-    }
+    set deviceGroupObj [GetDependentNgpfProtocolHandle $hBgp "deviceGroup"]
 
     if { [ info exists route_block ] } {
         foreach rb $route_block {
@@ -1266,12 +1218,18 @@ body SimRoute::config { args } {
                     set ipPoolObj [ixNet add $networkGroupObj "ipv4PrefixPools"]
                     ixNet setM $ipPoolObj -addrStepSupported true -name "Basic\ IPv4\ Addresses\ 1"
                     ixNet commit
+                    set ipPoolObj [ ixNet remapIds $ipPoolObj ]
                 }
                 if {$type == "ipv6"} {
                     set ipPoolObj [ixNet add $networkGroupObj "ipv6PrefixPools"]
                     ixNet setM $ipPoolObj -addrStepSupported true -name "Basic\ IPv6\ Addresses\ 1"
                     ixNet commit
+                    set ipPoolObj [ ixNet remapIds $ipPoolObj ]
                 }
+
+                set connector [ixNet add $ipPoolObj connector]
+                ixNet setA $connector -connectedTo $hBgp
+                ixNet commit
                 ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -start $start -direction increment
                 ixNet commit
             }
@@ -1341,15 +1299,39 @@ body SimRoute::config { args } {
     ## as_path_type -->  <segment_type>
     ## as_path_option --> asSetMode
     ## origin --> origin
-
     set bgpSimRouteObj ""
     set bgpV6SimRouteObj ""
-    if {[llength [ixNet getL $ipPoolObj bgpV6IPRouteProperty]] != 0} {
-        set bgpV6SimRouteObj [ixNet getL $ipPoolObj bgpV6IPRouteProperty]
+
+    if {[string first "ipv4" $hBgp] != -1} {
+        set ip_version "ipv4"
     }
-    if {[llength [ixNet getL $ipPoolObj bgpIPRouteProperty]] != 0} {
-        set bgpSimRouteObj [ixNet getL $ipPoolObj bgpIPRouteProperty]
+    if {[string first "ipv6" $hBgp] != -1} {
+        set ip_version "ipv6"
     }
+    set networkGrpList [ixNet getL $deviceGroupObj "networkGroup"]
+    if {$networkGrpList != "" } {
+        foreach networkGrpObj $networkGrpList {
+            if {$ip_version == "ipv4"} {
+                set ipPoolObj [ixNet getL $networkGrpObj "ipv4PrefixPools"]
+                if { $ipPoolObj == "" } {
+                    set ipPoolObj [ixNet getL $networkGrpObj "ipv6PrefixPools"]
+                }
+                if {[llength [ixNet getL $ipPoolObj bgpIPRouteProperty]] != 0} {
+                    set bgpSimRouteObj [ixNet getL $ipPoolObj bgpIPRouteProperty]
+                }
+            }
+            if {$ip_version == "ipv6"} {
+                set ipPoolObj [ixNet getL $networkGrpObj "ipv6PrefixPools"]
+                if { $ipPoolObj == "" } {
+                    set ipPoolObj [ixNet getL $networkGrpObj "ipv4PrefixPools"]
+                }
+                if {[llength [ixNet getL $ipPoolObj bgpV6IPRouteProperty]] != 0} {
+                    set bgpV6SimRouteObj [ixNet getL $ipPoolObj bgpV6IPRouteProperty]
+                }
+            }
+        }
+    }
+
     if { [info exists origin ]} {
         if {$bgpSimRouteObj != ""} {
             ixNet setA [ixNet getA $bgpSimRouteObj -enableOrigin]/singleValue -value True
@@ -1379,23 +1361,6 @@ body SimRoute::config { args } {
             }
         }
     }
-
-        # if { [info exists as_path ] } {
-        #   set aspathCmd ""
-
-        #   set astype [string tolower $as_path_type ]
-        #   switch $astype {
-        #       asset { set as_type "asSet"}
-        #       assequence { set as_type "asSequence"}
-        #       asconfedsequence { set as_type "asConfedSequence"}
-        #       asconfedset { set as_type "asConfedSet"}
-        #   }
-        #     lappend aspathCmd [list true $as_type $as_path]
-
-        #   ixNet setM $handle/asSegment \
-        #       -asSegments $aspathCmd
-        #     ixNet commit
-        # }
 
     if { [info exists as_path_type ] } {
         if { $as_path_type != "" } {
@@ -1427,7 +1392,7 @@ body SimRoute::config { args } {
 }
 
 class Vpn {
-    inherit RouterEmulationObject
+    inherit RouterNgpfEmulationObject
 
 	public variable bgpObj
 	public variable hBgp
@@ -1487,12 +1452,7 @@ class Vpn {
 			} 
 		}		
 		
-        set bgpImportObjList [ ixNet getL $bgpVrfObj bgpImportRouteTargetList ]
-        if { [ llength $bgpImportObjList ] == 0 } {
-            set bgpImportObjList [ ixNet add $bgpVrfObj bgpImportRouteTargetList]
-		}
-		#ixNet setA $handle 	-name $this -enabled True
-		ixNet commit
+        set bgpImportObjList [ ixNet getL $bgpVrfObj bgpExportRouteTargetList ]
 		array set routeBlock [ list ]				
 		set protocol vpn
 	}
@@ -1599,7 +1559,7 @@ body Vpn::set_route { args } {
 	set asNumber 100
 	set assignedNumber 1
 	set ipNumber 0.0.0.0
-    set deviceGroupObj [$bgpObj cget -deviceHandle]
+    set deviceGroupObj [GetDependentNgpfProtocolHandle $bgpVrfObj "deviceGroup"]
     #param collection
     Deputs "Args:$args "
     foreach { key value } $args {
@@ -1615,7 +1575,6 @@ body Vpn::set_route { args } {
     }
 
 	if { [ info exists route_block ] } {
-
 
 		if { [ info exists rd ] } {
 			set rdSplit [ split $rd ":" ]
@@ -1668,11 +1627,12 @@ body Vpn::set_route { args } {
                     ixNet setM $ipPoolObj -addrStepSupported true -name "Basic\ IPv6\ Addresses\ 1"
 		            ixNet commit
 		        }
+		        set connector [ixNet add $ipPoolObj connector]
+                ixNet setA $connector -connectedTo $bgpVrfObj
+                ixNet commit
                 ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -start $start -direction increment
                 ixNet commit
             }
-
-		
 			set pLen 24
             if { $prefix_len != "" } {
                 if {$type == "ipv4"} {
