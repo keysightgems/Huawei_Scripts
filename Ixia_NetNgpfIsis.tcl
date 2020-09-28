@@ -11,15 +11,16 @@
 #		3. Add SimulatedRoute class
 
 class IsisSession {
-    inherit RouterEmulationObject
-		
-    constructor { port { hIsisSession NULL } } {}
+    inherit RouterNgpfEmulationObject
+    public variable handle		
+
+	constructor { port { hIsisSession NULL } } {}
     method reborn {} {}
     method config { args } {}
     method get_stats {} {}
     method advertise_topo {} {}
 	method withdraw_topo {} {}
-    
+    public variable isisObj
 	public variable mac_addr
 }
 
@@ -27,15 +28,19 @@ body IsisSession::get_stats {} {
     set tag "body IsisSession::get_stats [info script]"
     Deputs "----- TAG: $tag -----"
     set root [ixNet getRoot]
-	set view {::ixNet::OBJ-/statistics/view:"BGP Aggregated Statistics"}
-    # set view  [ ixNet getF $root/statistics view -caption "Port Statistics" ]
-    Deputs "view:$view"
+
+    puts "Starting All Protocols"
+    ixNet exec startAllProtocols
+    puts "Sleep 30sec for protocols to start"
+    after 30000
+
+	set view {::ixNet::OBJ-/statistics/view:"ISIS-L3 RTR Per Port"}
     set captionList             [ ixNet getA $view/page -columnCaptions ]
     Deputs "caption list:$captionList"
-	set port_name				[ lsearch -exact $captionList {Stat Name} ]
-    set session_conf            [ lsearch -exact $captionList {Sess. Configured} ]
-    set session_succ            [ lsearch -exact $captionList {Sess. Up} ]
-    set flap         	        [ lsearch -exact $captionList {Session Flap Count} ]
+	set port_name				[ lsearch -exact $captionList {Port} ]
+    set session_conf            [ lsearch -exact $captionList {Sessions Total} ]
+    set session_succ            [ lsearch -exact $captionList {Sessions Up} ]
+    set flap         	        [ lsearch -exact $captionList {L2 Session Flap} ]
 	
     set ret [ GetStandardReturnHeader ]
 	
@@ -57,9 +62,13 @@ body IsisSession::get_stats {} {
 		if { [ string length $port ] == 1 } {
 			set port "0$port"
 		}
-		if { "${chassis}/Card${card}/Port${port}" != [ lindex $row $port_name ] } {
-			continue
-		}
+        Deputs "checking ${chassis}/Card${card}/Port${port} with [ lindex $row $port_name ]"
+
+        ## Check disabled by Sreekanth as the user can't pass in the same naming convention
+        ## So, failing when comparing 10.39.71.180/Card01/Port01 with ::port25
+		# if { "${chassis}/Card${card}/Port${port}" != [ lindex $row $port_name ] } {
+		# 	continue
+		# }
 
         set statsItem   "session_conf"
         set statsVal    [ lindex $row $session_conf ]
@@ -77,49 +86,65 @@ body IsisSession::get_stats {} {
         set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
         Deputs "ret:$ret"
     }
-        
     return $ret
 }
+
 body IsisSession::reborn {} {
-    set tag "body IsisSession::reborn [info script]"
+	global errNumber
+
+	set tag "body IsisSession::reborn [info script]"
     Deputs "----- TAG: $tag -----"
-	#-- add isis protocol
-Deputs "hPort:$hPort"
-	set handle [ ixNet add $hPort/protocols/isis router ]
-	ixNet setA $handle -name $this
-	ixNet commit
-	set handle [ ixNet remapIds $handle ]
-Deputs "handle:$handle"
-
-	#-- add router interface
-	set intList [ ixNet getL $hPort interface ]
-	if { [ llength $intList ] } {
-		set interface [ lindex $intList 0 ]
-	} else {
-		set interface [ ixNet add $hPort interface ]
-		ixNet setA $interface -enabled True
-		ixNet commit
-		set interface [ ixNet remapIds $interface ]
-	Deputs "port interface:$interface"
-	}
-	ixNet setA $hPort/protocols/isis -enabled True
-	ixNet setA $handle -enabled True
-	ixNet commit
-	#-- add vlan
-	set vlan [ ixNet add $interface vlan ]
-	ixNet commit
+    if { [ catch {
+        set hPort   [ $portObj cget -handle ]
+    } ] } {
+        error "$errNumber(1) Port Object in IsisSession ctor"
+    }
 	
-	#-- port/protocols/isis/router/interface
-	set rb_interface  [ ixNet add $handle interface ]
-	ixNet setM $rb_interface \
-	    -interfaceId $interface \
-	    -enableConnectedToDut True \
-	    -enabled True
-	ixNet commit
-	set rb_interface [ ixNet remapIds $rb_interface ]
-Deputs "rb_interface:$rb_interface"  
+	#-- add interface and isis protocol
+    set topoObjList [ixNet getL [ixNet getRoot] topology]
+    Deputs "topoObjList: $topoObjList"
+    set vportList [ixNet getL [ixNet getRoot] vport]
+    set vport [ lindex $vportList end ]
+    if {[llength $topoObjList] != [llength $vportList]} {
+        foreach topoObj $topoObjList {
+            set vportObj [ixNet getA $topoObj -vports]
+            if {$vportObj != $vport && $vport == $hPort} {
+                set ethernetObj [CreateProtoHandleFromRoot $hPort "ethernet"]
+			}
+            break
+        }
+    }
+    array set routeBlock [ list ]
+    set topoObjList [ixNet getL [ixNet getRoot] topology]
+    if { [ llength $topoObjList ] == 0 } {
+        set handle [CreateProtoHandleFromRoot $hPort isisL3]
+        ixNet setA $handle -name $this
+    } elseif { [ llength $topoObjList ] != 0 } {
+        foreach topoObj $topoObjList {
+  		    set vportObj [ixNet getA $topoObj -vports]
+            if {$vportObj == $hPort} {
+                set deviceGroupList [ixNet getL $topoObj deviceGroup]
+                foreach deviceGroupObj $deviceGroupList {
+	 				set ethernetList [ixNet getL $deviceGroupObj ethernet]
+					foreach ethernetObj $ethernetList {
+                        set handle [ixNet getL $ethernetObj isisL3]
+						if {[ llength $handle ] == 0 } {
+						    set handle [ixNet add $ethernetObj isisL3]
+						    ixNet commit
+                            set handle [ ixNet remapIds $handle ]
+                            ixNet setA $handle -name $this
+						}
+                    }
+                }
+            }
+        }
+    }
 
-	set protocol isis  
+	ixNet commit
+    #Enable vlan 
+    set ethernetObj [GetDependentNgpfProtocolHandle $handle "ethernet"]
+	ixNet setA [ixNet getA  $ethernetObj -enableVlans]/singleValue -value "true"
+	ixNet commit
 }
 
 body IsisSession::constructor { port { hIsisSession NULL } } {
@@ -127,55 +152,53 @@ body IsisSession::constructor { port { hIsisSession NULL } } {
     Deputs "----- TAG: $tag -----"
 	
     global errNumber
-    
+	set handle ""
+
     #-- enable protocol
     set portObj [ GetObject $port ]
-Deputs "port:$portObj"
+    Deputs "port:$portObj"
     if { [ catch {
 	    set hPort   [ $portObj cget -handle ]
-Deputs "port handle: $hPort"
+        Deputs "port handle: $hPort"
     } ] } {
 	    error "$errNumber(1) Port Object in IsisSession ctor"
     }
-Deputs "initial port..."
+    Deputs "initial port..."
 	if { $hIsisSession == "NULL" } {
         set hIsisSession [GetObjNameFromString $this "NULL"]
     }
     Deputs "----- hIsisSession: $hIsisSession, hPort: $hPort -----"
     if { $hIsisSession != "NULL" } {
-        set handle [GetValidHandleObj "isis" $hIsisSession $hPort]
+        set handle [GetValidNgpfHandleObj "isis" $hIsisSession $hPort]
         Deputs "----- handle: $handle -----"
         if { $handle != "" } {
             set handleName [ ixNet getA $handle -name ] 
-        } 
-        
-        
-    } 
-    
+        }
+    }
     if { ![info exists handle] || $handle == ""} {
      
         set handleName $this
         set handle ""
         reborn
     }
-        
-Deputs "Step10"
 }
 
 body IsisSession::config { args } {
     set tag "body IsisSession::config [info script]"
-Deputs "----- TAG: $tag -----"
+    global errNumber
+	Deputs "----- TAG: $tag -----"
 	
 	set sys_id "64:01:00:01:00:00"
-# in case the handle was removed
+    # in case the handle was removed
     if { $handle == "" } {
 	    reborn
     }
-	
-    Deputs "Args:$args "
+	set ip_version "ipv4"
+	Deputs "Args:$args "
     foreach { key value } $args {
 		set key [string tolower $key]
 		switch -exact -- $key {
+			-localSystemID -
 			-sys_id - 
 			-system_id {
 				set sys_id $value
@@ -184,10 +207,7 @@ Deputs "----- TAG: $tag -----"
 				set value [string tolower $value]
 					switch $value {
 					p2p {
-						set value pointToPoint
-					}
-					p2mp {
-						set value pointToMultipoint
+						set value pointpoint
 					}
 					default {
 						set value broadcast
@@ -198,13 +218,13 @@ Deputs "----- TAG: $tag -----"
             -discard_lsp {
             	set discard_lsp $value
             }
+			-enable_wide_metric {
+				set enable_wide_metric $value
+			}
             -interface_metric -
             -metric {
             	set metric $value
             }
-			-enable_wide_metric {
-				set enable_wide_metric $value
-			}
             -hello_interval {
             	set hello_interval $value  	    	
             }
@@ -225,7 +245,7 @@ Deputs "----- TAG: $tag -----"
                 if { [ IsMacAddress $value ] } {
                     set mac_addr $value
                 } else {
-Deputs "wrong mac addr: $value"
+                   Deputs "wrong mac addr: $value"
                     error "$errNumber(1) key:$key value:$value"
                 }
 				
@@ -256,125 +276,195 @@ Deputs "wrong mac addr: $value"
 			}
 		}
     }
+	set isisRouter [GetDependentNgpfProtocolHandle $handle "isisL3Router"]
+    set topoObjList [ixNet getL [ixNet getRoot] topology]
+    foreach topoObj $topoObjList {
+        set vportObj [ixNet getA $topoObj -vports]
+        if {$vportObj == $hPort} {
+            set deviceGroupObjList [ixNet getL $topoObj deviceGroup]
+            foreach deviceGroupObj $deviceGroupObjList {
+                set ethernetObj [ixNet getL $deviceGroupObj ethernet]
+                set ipv4Obj [ixNet getL $ethernetObj ipv4]
+                set ipv6Obj [ixNet getL $ethernetObj ipv6]
+
+                if { [ info exists ip_version ] } {
+                    if { [ string tolower $ip_version ] == "ipv6" } {
+
+                        if {[llength $ipv6Obj] == "0"} {
+                           set ipv6Obj [ixNet add $ethernetObj ipv6]
+                           ixNet commit
+                        }
+                    } elseif {[ string tolower $ip_version ] == "ipv4" } {
+                        if {[llength $ipv4Obj] == "0"} {
+                            set ipv4Obj [ixNet add $ethernetObj ipv4]
+                            ixNet commit
+                        }
+
+                    }
+                }
+				
+				if { [ info exists ipv4_addr ] } {
+                    if { $ip_version == "ipv4" } {
+                        Deputs "ipv4: [ixNet getL $ethernetObj ipv4]"
+                        set ipv4Obj [ixNet getL $ethernetObj ipv4]
+						
+                        ixNet setA [ixNet getA $ipv4Obj -address]/singleValue -value $ipv4_addr
+                        ixNet commit
+                    } 
+                }
+				
+                if { [ info exists ipv6_addr ] } {
+                    if { $ip_version == "ipv6" } {                   
+                        Deputs "ipv6: [ixNet getL $ethernetObj ipv6]"
+                        Deputs "interface:$ethernetObj"
+                        set ipv6Obj [ixNet getL $ethernetObj ipv6]
+                        ixNet setA [ixNet getA $ipv6Obj -address]/singleValue -value $ipv6_addr
+                        ixNet commit
+                    }
+               	}		
+				
+                if { [ info exists ipv4_gw ] } {
+                    if { $ip_version == "ipv4" } {
+                        set ipv4Obj [ixNet getL $ethernetObj ipv4]
+                        ixNet setA [ixNet getA $ipv4Obj -gatewayIp]/singleValue  -value $ipv4_gw
+                        ixNet commit
+                    }
+                }
+
+                if { [ info exists ipv6_gw ] } {
+                    if { $ip_version == "ipv6" } {
+                        set ipv6Obj [ixNet getL $ethernetObj ipv6]
+                        ixNet setA [ixNet getA $ipv6Obj -gatewayIp]/singleValue -value $ipv6_gw
+                        ixNet commit
+                    }
+                }
+				
+				if { [ info exists ipv4_prefix_len ] } {
+                    if {$ip_version == "ipv4"} {
+                    if {$ipv4_prefix_len == "255.0.0.0"} {
+                        set pLen 8						
+                    } elseif  {$ipv4_prefix_len == "255.255.0.0"} {
+                        set pLen 16
+                    } elseif  {$ipv4_prefix_len == "255.255.255.0"} {
+                        set pLen 24
+                    } else {
+                        set pLen 32
+                    }
+                
+                    ixNet setA [ixNet getA $ipv4Obj -prefix]/singleValue -value $pLen
+                    ixNet commit
+				   }
+                }
+				
+ 				if { [ info exists ipv6_prefix_len ] } {
+                    if { $ip_version == "ipv6" } {
+			
+					    set ipv6Obj [ixNet getL $ethernetObj ipv6]
+                        ixNet setA [ixNet getA $ipv6Obj -prefix]/singleValue -value $ipv6_prefix_len
+                        ixNet commit
+					}
+                }               
+            
+            
+                if { [ info exists mac_addr ] } {
+                    ixNet setA [ixNet getA $ethernetObj -mac]/singleValue -value $mac_addr
+                    ixNet commit
+                }
+                if { [ info exists loopback_ipv4_addr ] } {
+                    Deputs "not implemented parameter: loopback_ipv4_addr"
+                }
+
+				if { [ info exists vlan_id ] } {
+				    set vlanObj [ixNet getL $ethernetObj vlan]
+					if {$vlanObj == ""} {
+					    set vlanObj [ixNet add $ethernetObj vlan]
+					}
+				    ixNet setA [ixNet getA $vlanObj -vlanId]/singleValue -value $vlan_id
+                }	
+
+	            if { [ info exists level ] } {
+				
+		            switch [ string tolower $level ] {
+				        l1 {
+				           set level level1
+			            }
+					    l2 {
+				           set level level2
+			            }
+			            l12 {
+				           set level l1l2
+			            }
+		            }
+		             ixNet setA [ixNet getA $handle -levelType]/singleValue -value $level
+	            }
 	
-	if { [ info exists ip_version ] } {
-		if { [ string tolower $ip_version ] == "ipv6" } {
-			if { [ llength [ ixNet getL $interface ipv4 ] ] } {
-				ixNet remove [ ixNet getL $interface ipv4 ]
-				ixNet commit
-			}
-		} else {
-			if { ![ llength [ ixNet getL $interface ipv4 ] ] } {
-				ixNet add $interface ipv4
-				ixNet commit
-			}
-		}
+                if { [ info exists sys_id ] } {
+	               set bridgeDataObj [ixNet getL $deviceGroupObj bridgeData]
+		           if {[ llength $bridgeDataObj ] == 0} {
+				      set bridgeDataObj [ixNet add $deviceGroupObj bridgeData]
+				   }
+				   regsub -all {:} $sys_id { } {sys_id}
+                   set sys_id \{$sys_id\}
+				   
+				   ixNet setA [ixNet getA  $bridgeDataObj -systemId]/singleValue -value $sys_id
+                   ixNet commit 
+                }
+				
+				if { [ info exists enable_wide_metric ] } {
+			       ixNet setA [ixNet getA $isisRouter -enableWideMetric]/singleValue -value $enable_wide_metric
+
+                }
+				
+				if { [ info exists network_type ] } {
+	                ixNet setA [ixNet getA $handle -networkType]/singleValue -value $network_type
+                }
+
+                if { [ info exists hello_interval ] } {
+	                ixNet setA [ixNet getA $handle -level1HelloInterval]/singleValue -value $hello_interval
+
+                }	
+
+                if { [ info exists discard_lsp ] } {
+				    ixNet setA [ixNet getA $isisRouter -discardLSPs]/singleValue -value $discard_lsp
+
+                }
+                if { [ info exists metric ] } {
+			         ixNet setA [ixNet getA $handle -interfaceMetric]/singleValue -value $metric
+
+                }
+
+                if { [ info exists dead_interval ] } {
+		            ixNet setA [ixNet getA $handle -level1DeadInterval]/singleValue -value $dead_interval
+
+
+                }
+                if { [ info exists lsp_refreshtime ] } {
+				     ixNet setA [ixNet getA $isisRouter -lSPRefreshRate]/singleValue -value $lsp_refreshtime
+
+                }
+                if { [ info exists lsp_lifetime ] } {
+		            ixNet setA [ixNet getA $isisRouter -lSPLifetime]/singleValue -value $lsp_lifetime
+
+                } 
+                ixNet commit
+	        }
+	    }
 	}
-	
-	if { [ info exists ipv4_addr ] } {
-		ixNet setA [ ixNet getL $interface ipv4 ] \
-		-ip $ipv4_addr
-	}
-	
-	if { [ info exists ipv4_prefix_len ] } {
-		ixNet setA [ ixNet getL $interface ipv4 ] \
-		-maskWidth $ipv4_prefix_len
-	}
-	
-	if { [ info exists ipv4_gw ] } {
-		ixNet setA [ ixNet getL $interface ipv4 ] \
-		-gateway $ipv4_gw
-	}
-	
-	if { [ info exists ipv6_addr ] } {
-		ixNet setA [ ixNet getL $interface ipv6 ] \
-		-ip $ipv6_addr
-	}
-	
-	if { [ info exists ipv6_prefix_len ] } {
-		ixNet setA [ ixNet getL $interface ipv6 ] \
-		-prefixLength $ipv6_prefix_len
-	}
-	
-	if { [ info exists ipv6_gw ] } {
-		ixNet setA [ ixNet getL $interface ipv6 ] \
-		-gateway $ipv6_gw
-	}
-	
-	if { [ info exists level ] } {
-		switch [ string tolower $level ] {
-			l1 {
-				set level level1
-			}
-			l2 {
-				set level level2
-			}
-			l12 {
-				set level level1Level2
-			}
-		}
-		ixNet setA $rb_interface -level $level
-	}
-	
-    if { [ info exists sys_id ] } {
-		while { [ ixNet getF $hPort/protocols/isis router -systemId "[ split $sys_id : ]"  ] != "" } {
-Deputs "sys_id: $sys_id"		
-			set sys_id [ IncrMacAddr $sys_id "00:00:00:00:00:01" ]
-		}
-Deputs "sys_id: $sys_id"		
-	    ixNet setA $handle -systemId $sys_id
-    }
-    if { [ info exists enable_wide_metric ] } {
-	    ixNet setA $handle -enableWideMetric $enable_wide_metric
-    }
-    if { [ info exists network_type ] } {
-	    ixNet setA $rb_interface -networkType $network_type
-    }
-    if { [ info exists discard_lsp ] } {
-    	ixNet setA $handle -enableDiscardLearnedLsps $discard_lsp
-    }
-    if { [ info exists metric ] } {
-	    ixNet setA $rb_interface -metric $metric
-    }
-    if { [ info exists hello_interval ] } {
-	    ixNet setA $rb_interface -level1HelloTime $hello_interval
-    }
-    if { [ info exists dead_interval ] } {
-	    ixNet setA $rb_interface -level1DeadTime $dead_interval
-    }
-    if { [ info exists vlan_id ] } {
-	    set vlan [ixNet getL $interface vlan]
-	    ixNet setA $vlan -vlanId $vlan_id
-    }
-    if { [ info exists lsp_refreshtime ] } {
-    	ixNet setA $handle -lspRefreshRate $lsp_refreshtime
-    }
-    if { [ info exists lsp_lifetime ] } {
-    	ixNet setA $handle -lspLifeTime $lsp_lifetime
-    } 
-	if { [ info exists mac_addr ] } {
-Deputs "interface:$interface mac_addr:$mac_addr"
-		ixNet setA $interface/ethernet -macAddress $mac_addr
-	}
+
     ixNet commit
 	return [GetStandardReturnHeader]
 
 }
 
-
 body IsisSession::advertise_topo {} {
 
 	set tag "body IsisSession::advertise_topo [info script]"
-Deputs "----- TAG: $tag -----"
+    Deputs "----- TAG: $tag -----"
 
-	foreach route [ ixNet getL $handle routeRange ] {
-	
-		ixNet setA $route -enabled True
-	}
-    if {[info exists hNetworkRange ]} {
-    
-        ixNet setA $hNetworkRange -enabled True
-       
+    set deviceGroupObj [GetDependentNgpfProtocolHandle $handle "deviceGroup"]
+    set networkGroupList [ixNet getL $deviceGroupObj networkGroup]
+    foreach networkGroupObj $networkGroupList {
+        ixNet setA [ixNet getA $networkGroupObj -enabled]/singleValue -value true
     }
     ixNet commit
     return [GetStandardReturnHeader]
@@ -382,14 +472,12 @@ Deputs "----- TAG: $tag -----"
 body IsisSession::withdraw_topo {} {
 
 	set tag "body IsisSession::withdraw_topo [info script]"
-Deputs "----- TAG: $tag -----"
+    Deputs "----- TAG: $tag -----"
 
-	foreach route [ ixNet getL $handle routeRange ] {
-	
-		ixNet setA $route -enabled False
-	}
-	if {[info exists hNetworkRange ]} {
-	    ixNet setA $hNetworkRange -enabled False
+    set deviceGroupObj [GetDependentNgpfProtocolHandle $handle "deviceGroup"]
+    set networkGroupList [ixNet getL $deviceGroupObj networkGroup]
+    foreach networkGroupObj $networkGroupList {
+        ixNet setA [ixNet getA $networkGroupObj -enabled]/singleValue -value false
     }
 	ixNet commit
     return [GetStandardReturnHeader]
@@ -397,38 +485,182 @@ Deputs "----- TAG: $tag -----"
 
 
 class SimulatedRoute {
-	inherit SimulatedSummaryRoute
+	public variable deviceGroupObj
+    public variable isisObj
+    public variable isisHandle
+    public variable portObj
+    public variable hPort
 	
-	constructor { router } { chain $router } {}
+	constructor { router } {
+        set isisObj [GetObject $router]
+        set isisHandle [$isisObj cget -handle]
+        set deviceGroupObj [GetDependentNgpfProtocolHandle $isisHandle "deviceGroup"]
+        set portObj [ $router cget -portObj ]
+		set hPort [ $router cget -hPort ]
+    }
 	method config { args } {}
-
 }
 
 body SimulatedRoute::config { args } {
-	global errorInfo
+    global errorInfo
     global errNumber
     set tag "body SimulatedRoute::config [info script]"
     Deputs "----- TAG: $tag -----"
-
-	eval chain $args
-
-	foreach { key value } $args {
-        set key [string tolower $key]
-        switch -exact -- $key {
-			-route_type {
-				set route_type $value
-			}
+        # eval chain $args
+        foreach { key value } $args {
+            set key [string tolower $key]
+            switch -exact -- $key {            
+                -age {
+                    set age $value
+                }            
+                -checksum {
+                    set checksum $value
+                }
+                -metric {
+                    set metric $value
+                }            
+                -route_block {
+                    set route_block $value
+                }
+                -enabled {
+                    set enabled [BoolTrans $value]
+                }
+                -route_type {
+                    set route_type $value
+                }
+            }
         }
-    }
-	
-	if { [ info exists route_type ] } {
-		if { [ string tolower $route_type ] == "internal" } {
-			set route_origin false
-		} else {
-			set route_origin true
-		}
-		ixNet setA $handle -routeOrigin $route_origin
-	}
-	
-	ixNet commit
+
+            if { [ info exists route_type ] } {
+                if { [ string tolower $route_type ] == "internal" } {
+                    set route_origin false
+                } else {
+                    set route_origin true
+                }
+            
+                set deviceGroupObj [GetDependentNgpfProtocolHandle $isisHandle "deviceGroup" ]
+                set networkGroupObj [ixNet getL $deviceGroupObj networkGroup]
+                if {[llength $networkGroupObj] == 0} {
+                    set networkGroupObj [ixNet add $deviceGroupObj "networkGroup"]
+                    ixNet commit
+                    set networkGroupObj [ixNet remapIds $networkGroupObj]
+                }
+
+                set rb [ GetObject $route_block ]
+                $route_block configure -protocol "isis"
+                
+                if { $rb == "" } {
+                    return [GetErrorReturnHeader "No object found...-route_block"]
+                }
+                
+                set num 		[ $rb cget -num ]
+                set start 		[ $rb cget -start ]
+                set step		[ $rb cget -step ]
+                set prefix_len	[ $rb cget -prefix_len ]
+
+                Deputs "num:$num start:$start step:$step prefix_len:$prefix_len"
+                ixNet setA $networkGroupObj -multiplier $num
+                ixNet setA [ixNet getA $networkGroupObj -enabled]/singleValue -value True
+                ixNet commit
+                set pLen $prefix_len
+                if {$step !=""} {
+                    set step $step
+                } else {
+                    set step 1
+                }
+
+                if {[IsIPv6Address $start]} {
+                    set ipv6PoolObj [ixNet getL $networkGroupObj ipv6PrefixPools]
+                    if {[llength $ipv6PoolObj] == 0} {
+                        set ipv6PoolObj [ixNet add $networkGroupObj "ipv6PrefixPools"]
+                    }
+                }
+                if {[IsIPv4Address $start]} {
+                    set ipv4PoolObj [ixNet add $networkGroupObj "ipv4PrefixPools"]
+                    if {[llength $ipv4PoolObj] == 0} {
+                        set ipv4PoolObj [ixNet add $networkGroupObj "ipv4PrefixPools"]
+                    }
+                }
+                ixNet commit
+
+                if {[info exists metric]} {
+                    if {[info exists ipv4PoolObj]} {
+                        set isisRoutePropObj [ixNet getL $ipv4PoolObj isisL3RouteProperty]
+                        ixNet setA [ixNet getA $isisRoutePropObj -metric]/singleValue -value $metric
+                    }
+                    if {[info exists ipv6PoolObj]} {
+                        set isisRoutePropObj [ixNet getL $ipv6PoolObj isisL3RouteProperty]
+                        ixNet setA [ixNet getA $isisRoutePropObj -metric]/singleValue -value $metric
+                    }
+                }
+
+                set handle $networkGroupObj
+                if {[IsIPv6Address $start]} {
+                    ixNet setM [ixNet getA $ipv6PoolObj -networkAddress]/counter -start $start -direction increment
+                    ixNet setA [ixNet getA $ipv6PoolObj -prefixLength]/singleValue -value $pLen
+                    if {$pLen == 16} {
+                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 0 0 $step]
+                    } elseif  {$pLen == 32} {
+                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 2 2 $step]
+                    } elseif  {$pLen == 48} {
+                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 4 4 $step]
+                    } elseif  {$pLen == 64} {
+                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 6 6 $step]
+                    } elseif  {$pLen == 80} {
+                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 8 8 $step]
+                    } elseif  {$pLen == 96} {
+                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 10 10 $step]
+                    } elseif  {$pLen == 112} {
+                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 12 12 $step]
+                    } else {
+                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 14 14 $step]
+                    }
+                    ixNet setA [ixNet getA $ipv6PoolObj -networkAddress]/counter -step $stepvalue
+                }
+                if {[IsIPv4Address $start]} {
+                    ixNet setM [ixNet getA $ipv4PoolObj -networkAddress]/counter -start $start -direction increment
+                    ixNet setA [ixNet getA $ipv4PoolObj -prefixLength]/singleValue -value $pLen
+                    if {$pLen == 8} {
+                        set stepvalue [string replace "0.0.0.0" 0 0 $step]
+                    } elseif  {$pLen == 16} {
+                        set stepvalue [string replace "0.0.0.0" 2 2 $step]
+                    } elseif  {$pLen == 24} {
+                        set stepvalue [string replace "0.0.0.0" 4 4 $step]
+                    } else {
+                        set stepvalue [string replace "0.0.0.0" 6 6 $step]
+                    }
+                    ixNet setA [ixNet getA $ipv4PoolObj -networkAddress]/counter -step $stepvalue
+                }
+                ixNet commit
+                
+                $rb configure -handle $handle
+                $rb configure -portObj $portObj
+                $rb configure -hPort $hPort
+                $rb configure -protocol "isis"
+                $rb enable
+                
+                set routeBlock($rb,handle) $handle
+                lappend routeBlock(obj) $rb
+
+            } else {
+                return [GetErrorReturnHeader "Madatory parameter needed...-route_block"]
+            }
+
+        if {[info exists ipv4PoolObj] && [llength $ipv4PoolObj]} {
+            set isisRoutePropObj [ixNet getL $ipv4PoolObj isisL3RouteProperty]
+            ixNet setA $isisRoutePropObj -routeOrigin $route_origin
+            set connector [ixNet add $ipv4PoolObj connector]
+            ixNet setA $connector -connectedTo $isisHandle
+            ixNet commit
+        }
+
+        if {[info exists ipv6PoolObj] && [llength $ipv6PoolObj]} {
+            set isisRoutePropObj [ixNet getL $ipv6PoolObj isisL3RouteProperty]
+            ixNet setA $isisRoutePropObj -routeOrigin $route_origin
+            set connector [ixNet add $ipv6PoolObj connector]
+            ixNet setA $connector -connectedTo $isisHandle
+            ixNet commit
+        }
+        
+    ixNet commit
 }

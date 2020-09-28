@@ -17,8 +17,8 @@ proc GetEnxNgpfInfo { args } {
 			}           
         }
     }
-
 }
+
 proc GetOspfNgpfRouterHandle {handle {option 0}} {
     set result [regexp {(.*)(topology:[0-9]+)/(deviceGroup:[0-9]+).*([0-9]):(.*)$} $handle match match1 match2 match3 match4]
 	set devHandle [join $match1/$match2/$match3]
@@ -34,6 +34,94 @@ proc GetOspfNgpfRouterHandle {handle {option 0}} {
 		return $version
 	}
 		return $returnHandle
+}
+
+proc CheckForNgpfProtocol {handle protocol} {
+	set result [regexp {[a-z]*} $handle match]
+	set result [string match $match $protocol]
+	return $result
+}
+
+proc GetDependentNgpfProtocolHandle {handle option} {
+    # set result [regexp {(.*)(topology:[0-9]+)/(deviceGroup:[0-9]+).*([0-9]):(.*)$} $handle match match1 match2 match3 match4]
+    set result [regexp {(.*)(topology:[0-9]+)/(deviceGroup:[0-9]+)/(ethernet:[0-9]+)/([a-z|A-Z]+[0-9]+:[0-9]+)(.*)$} $handle match match1 match2 match3 match4 match5 match6]
+	Deputs "match $match match1 $match1 match2 $match2 match3 $match3 match4 $match4 match5 $match5 match6 $match6"
+	set devHandle [join $match1/$match2/$match3]
+	if {$option == "deviceGroup"} {
+		return $devHandle
+	} elseif {$option == "ethernet"} {
+		# set result [regexp {(eth\w+:\d+)} $handle match5]
+		set ethHandle [join $match1/$match2/$match3/$match4]
+		return $ethHandle
+	} elseif {$option == "ip"} {
+		# set result [regexp {(eth\w+:\d+)} $handle match5]
+		# set ethHandle [join $match1/$match2/$match3/$match5]
+		# set result [regexp {(ip\w+:\d+)} $handle match6]
+		set ipHandle [join $match1/$match2/$match3/$match4/$match5]
+		Deputs "returning ipHandle $ipHandle"
+		return $ipHandle
+	} elseif {$option == "networkGroup"} {
+		set networkGroupHandles [ixNet getL $devHandle "networkGroup"]
+		return $networkGroupHandles
+	} elseif {$option == "isisL3Router"} {
+		# set ethHandle [join $match1/$match2/$match3/$match4]
+		set isisRouterHandle [ixNet getL $devHandle isisL3Router]
+		return $isisRouterHandle
+	} elseif {$option == "isisL3"} {
+		set ethHandle [join $match1/$match2/$match3/$match4]
+		set isisHandle [ixNet getL $ethHandle isisL3]
+		return $isisHandle
+	} elseif {$option == "ipv4PrefixPools"} {
+		set networkGroupHandles [ixNet getL $devHandle "networkGroup"]
+		if {$networkGroupHandles == ""} {
+			return ""
+		}
+		set ipv4PoolObj [ixNet getL $networkGroupHandles "ipv4PrefixPools"]
+		return $ipv4PoolObj
+	} elseif {$option == "ipv6PrefixPool"} {
+		set networkGroupHandles [ixNet getL $devHandle "networkGroup"]
+		if {$networkGroupHandles == ""} {
+			return ""
+		}
+		set ipv6PoolObj [ixNet getL $networkGroupHandles "ipv4PrefixPools"]
+		return $ipv6PoolObj
+	}
+}
+
+## This proc creates required stack NGPF from root. 
+proc CreateProtoHandleFromRoot {port stack {ipVersion " "} {deviceGroup 0}} {
+    set topoObj [ixNet add [ixNet getRoot] topology -vports $port]
+	ixNet commit
+    set deviceGroupObj [ixNet add $topoObj deviceGroup]
+	ixNet commit
+	ixNet setA $deviceGroupObj -multiplier "1"
+	ixNet commit
+	set ethObj [ixNet add $deviceGroupObj ethernet]
+	ixNet commit
+
+	if {$stack == "ethernet"} {
+		set handle $ethObj
+	} elseif {$ipVersion == "ipv4"} {
+		set ipv4Obj [ixNet add $ethObj ipv4]
+		ixNet commit
+		set handle [ixNet add $ipv4Obj $stack]
+		ixNet commit
+	} elseif {$ipVersion == "ipv6"} {
+		set ipv6Obj [ixNet add $ethObj ipv6]
+		ixNet commit
+		set handle [ixNet add $ipv6Obj $stack]
+		ixNet commit
+	} elseif {$ipVersion == " "} {
+		set handle [ixNet add $ethObj $stack]
+		ixNet commit
+	}
+	set handle [ixNet remapIds $handle]
+	if {$deviceGroup == 1} {
+		set deviceGroupObj [ixNet remapIds $deviceGroupObj]
+		return [concat $deviceGroupObj $handle]
+	} else {
+		return $handle
+	}
 }
 
 proc GenerateProtocolsNgpfObjects { portObj } {
@@ -293,35 +381,35 @@ proc GetValidNgpfHandleObj { objType handle { parentHnd "" } } {
 			foreach router $routers {
                 if { $router == $handle } {
                     return $handle
-                } 
-				if {$ngpfMode == 0} {
-                	if {[ixNet getA $router -networkAddress]  == $handle} {
-                    	return $router
-                	}
-				}
+                } 				
             }
 			return ""
 		}
 		igmp_host {
-			set protocols [ixNet getL $parentHnd protocols]
-			set protocol [ixNet getL $protocols igmp]
-			if { [ ixNet getA $protocol -enabled ] } {
-				set hosts [ixNet getL $protocol host]
-				foreach host $hosts {
-					if { $host == $handle } {
-						return $handle
-					} 
-                    if {[ixNet getA [ixNet getA $host -interfaceId] -description] == $handle} {
-                        return $host
+			set topoObjList [ixNet getL [ixNet getRoot] topology]
+            if { [ llength $topoObjList ] != 0 } {
+                foreach topoObj $topoObjList {
+                    set deviceGroupList [ixNet getL $topoObj deviceGroup]
+                    foreach deviceObj $deviceGroupList {
+                        set ethernetObjList [ixNet getL $deviceObj ethernet]
+                        foreach ethernetObj $ethernetObjList {
+                            set ipv4ObjList [ixNet getL $ethernetObj ipv4]
+                            if { [ llength $ipv4ObjList ] != 0 } {
+                                foreach ipv4Obj $ipv4ObjList {
+                                    set igmpObj [ixNet getL $ipv4Obj igmpHost]
+                                    if { $igmpObj == $handle } {
+                                        return $handle
+                                    }
+                                    #if {[ixNet getA [ixNet getA $router -interfaces] -description] == $handle} {
+                                    #    return $router
+                                    #}
+                                }
+                            }
+                        }
                     }
-				}
-				
-				# set index [expr $index - 1]
-				# if { $index >= 0 && [llength $hosts] != 0 && [llength $hosts] > $index } {
-					# return [lindex $hosts $index]
-				# }
-			}			
-			return ""
+                }
+            }
+            return ""
 		}
         pim_router {
 			set protocols [ixNet getL $parentHnd protocols]
@@ -384,6 +472,24 @@ proc GetValidNgpfHandleObj { objType handle { parentHnd "" } } {
 			}			
 			return ""		
 		}
+		isis {
+	  	    set topoObjList [ixNet getL [ixNet getRoot] topology]
+			if { [ llength $topoObjList ] != 0 } {
+				foreach topoObj $topoObjList {
+					set deviceGroupList [ixNet getL $topoObj deviceGroup]
+					foreach deviceObj $deviceGroupList {
+						set ethernetObjList [ixNet getL $deviceObj ethernet]
+						foreach ethernetObj $ethernetObjList {
+							set isisObj [ixNet getL $ethernetObj isisL3]
+								if { $isisObj == $handle } {
+										return $handle
+								}
+						}
+					}
+				}
+			}	
+			return ""
+		} 		
 		ldp {
 			set protocols [ixNet getL $parentHnd protocols]
 			set protocol [ixNet getL $protocols ldp]
@@ -671,7 +777,132 @@ proc GetValidNgpfHandleObj { objType handle { parentHnd "" } } {
     return ""
 }
 
+# proc GetIsisNgpfRouterHandle {handle} {
+#     #::ixNet::OBJ-/topology:1/deviceGroup:1/ethernet:1/isisL3:3
+#     set result [regexp {(.*)(topology:[0-9]+)/(deviceGroup:[0-9]+)/(ethernet:[0-9]+)/.*([0-9]):(.*)$} $handle match match1 match2 match3 match4]
+# 	set devHandle [join $match1/$match2/$match3]
+#     set returnRouterHandle [ixNet getL $devHandle isisL3Router]
+# 	return $returnRouterHandle
+	
+# }
+
+proc GetLdpRouterHandle {handle {option 0}} {
+    set result [regexp {(.*)(topology:[0-9]+)/(deviceGroup:[0-9]+)/(ethernet:[0-9]+)/(ipv([4|6]):[0-9])+/ldpBasicRouter.*:(.*)$} $handle match match1 match2 match3 match4 match5 match6]
+	Deputs "match1 $match1 match2 $match2 match3 $match3 match4 $match4 match5 $match5 match6 $match6"
+	set devHandle [join $match1/$match2/$match3/$match4/$match5]
+	
+	if {$match6 == 4} {
+		set version "ipv4"
+		set ldpInterface [ixNet getL $devHandle ldpConnectedInterface]
+		if {$ldpInterface == ""} {
+	        set ldpInterface [ixNet add $devHandle ldpConnectedInterface]
+			ixNet commit
+			set ldpInterface [ ixNet remapIds $ldpv4Interface ]
+		}
+		
+    } elseif {$match6 == 6}  {
+		set ldpInterface [ixNet getL $devHandle ldpv6ConnectedInterface]
+	    set version "ipv6"
+		if {$ldpInterface == ""} {
+		    set ldpInterface [ixNet add $devHandle ldpv6ConnectedInterface]
+			ixNet commit
+			set ldpInterface [ ixNet remapIds $ldpInterface ]
+	    }		
+	} else {
+	    puts "Unable to find the version"
+	}
+	
+	if {$option != 0} {
+	    return [list $ldpInterface $version]
+	}
+
+}
 
 
+#We will add leftover packages once implemented for NGPF
+puts "load package Ixia_Util..."
+if { [ catch {
+	source [file join $currDir Ixia_Util.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_Util.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+} 
+puts "load package Ixia_NetNgpfObj..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfObj.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetNgpfObj.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+} 	
+puts "load package Ixia_NetNgpfPort..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfPort.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetNgpfPort.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+} 	
+puts "load package Ixia_NetNgpfBgp..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfBgp.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetNgpfBgp.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+}
+
+puts "load package Ixia_NetNgpfIgmp..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfIgmp.tcl]
+} err ] } {
+	if { [ catch {
+		source [file join $currDir Ixia_NetNgpfIgmp.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+} 
+
+puts "load package Ixia_NetNgpfOspf..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfOspf.tcl]
+} err ] } {
+	if { [ catch {
+		source [file join $currDir Ixia_NetNgpfOspf.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+} 
+
+puts "load package Ixia_NetNgpfIsis..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfIsis.tcl]
+} err ] } {
+	if { [ catch {
+		source [file join $currDir Ixia_NetNgpfIsis.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+} 
+
+puts "load package Ixia_NetNgpfLdp..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfLdp.tcl]
+} err ] } {
+	if { [ catch {
+		source [file join $currDir Ixia_NetNgpfLdp.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+} 
 #IxDebugOn
 #IxDebugCmdOn

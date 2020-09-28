@@ -315,8 +315,12 @@ set assign_realportList ""
 # add for loadconfig mode port mapping
 set enx_portNameList ""
 set enx_portLocationList ""
-#Anish(Have to get this from Env variable)
-set ngpfMode 0
+
+if {[info exist env(ngpfMode)]} {
+	set ngpfMode [set env(ngpfMode)]
+} else {
+	set ngpfMode 0
+}
 global ngpfMode
 
 proc GetEnxInfo { args } {
@@ -336,6 +340,7 @@ proc GetEnxInfo { args } {
     }
 
 }
+
 proc loadconfig { filename } {
     global portlist
     global trafficlist
@@ -528,7 +533,6 @@ proc initLoadObjects {} {
         Traffic $tname $tport $tobj
     }
     
-    
 }
 
 proc GenerateProtocolsObjects { portObj } {
@@ -666,7 +670,7 @@ proc GetAllPortObj {} {
 }
 
 proc GetValidHandleObj { objType handle { parentHnd "" } } {
-    global ngpfMode
+    #global ngpfMode
     set tag "GetValidHandleObj [info script]"
     Deputs "----- TAG: $tag -----"
 	set index 0
@@ -746,83 +750,35 @@ proc GetValidHandleObj { objType handle { parentHnd "" } } {
 			return ""
 		}
 		bgp {
-		    if {$ngpfMode != 0} {
-		        set topoObjList [ixNet getL [ixNet getRoot] topology]
-		        if { [ llength $topoObjList ] != 0 } {
-		            foreach topoObj $topoObjList {
-		                set deviceGroupList [ixNet getL $topoObj deviceGroup]
-		                foreach deviceObj $deviceGroupList {
-		                    set ethernetObjList [ixNet getL $deviceObj ethernet]
-                            foreach ethernetObj $ethernetObjList {
-                                set ipv4ObjList [ixNet getL $ethernetObj ipv4]
-                                set ipv6ObjList [ixNet getL $ethernetObj ipv6]
-                                if { [ llength $ipv4ObjList ] != 0 } {
-                                    foreach ipv4Obj $ipv4ObjList {
-                                        set bgpObj [ixNet getL $ipv4Obj bgpIpv4Peer]
-                                        if { $bgpObj == $handle } {
-                                            return $handle
-                                        }
-                                        #if {[ixNet getA [ixNet getA $router -interfaces] -description] == $handle} {
-                                        #    return $router
-                                        #}
-                                    }
-                                }
-                                if { [ llength $ipv6ObjList ] != 0 } {
-                                    foreach ipv6Obj $ipv6ObjList {
-                                        set bgpObj [ixNet getL $ipv6Obj bgpIpv6Peer]
-                                        if { $bgpObj == $handle } {
-                                            return $handle
-                                        }
-                                        #if {[ixNet getA [ixNet getA $router -interfaces] -description] == $handle} {
-                                        #    return $router
-                                        #}
-                                    }
-                                }
-                            }
-		                }
-		            }
-		        }
-                return ""
-            } else {
-                Deputs "check bgp: checkname $handle"
-                Deputs "check parentHnd: checkname $parentHnd"
-                set protocols [ixNet getL $parentHnd protocols]
-                set protocol [ixNet getL $protocols bgp]
-                if { [ ixNet getA $protocol -enabled ] } {
-                    set routers [ixNet getL $protocol neighborRange]
-                    foreach router $routers {
-                        if { $router == $handle } {
-                            return $handle
-                        }
-                        if {[ixNet getA [ixNet getA $router -interfaces] -description] == $handle} {
-                            return $router
-                        }
+		    set protocols [ixNet getL $parentHnd protocols]
+            set protocol [ixNet getL $protocols bgp]
+            if { [ ixNet getA $protocol -enabled ] } {
+                set routers [ixNet getL $protocol neighborRange]
+                foreach router $routers {
+                    if { $router == $handle } {
+                        return $handle
                     }
-
-                    # set index [expr $index - 1]
-                    # if { $index >= 0 && [llength $routers] != 0 && [llength $routers] > $index } {
-                        # return [lindex $routers $index]
-                    # }
+                    if {[ixNet getA [ixNet getA $router -interfaces] -description] == $handle} {
+                        return $router
+                    }
                 }
-                return ""
+
+                # set index [expr $index - 1]
+                # if { $index >= 0 && [llength $routers] != 0 && [llength $routers] > $index } {
+                    # return [lindex $routers $index]
+                # }
             }
+            return ""
 		}
         simroute {						
-			if {$ngpfMode == 1} {
-   	        	set routers [ixNet getL $parentHnd networkGroup]
-			} elseif {$ngpfMode == 0} {
-   	         	set routers [ixNet getL $parentHnd routeRange]
-			}
-
+			set routers [ixNet getL $parentHnd routeRange]
             foreach router $routers {
                 if { $router == $handle } {
                     return $handle
                 } 
-				if {$ngpfMode == 0} {
-                	if {[ixNet getA $router -networkAddress]  == $handle} {
-                    	return $router
-                	}
-				}
+				if {[ixNet getA $router -networkAddress]  == $handle} {
+                    return $router
+                }
             }
 			return ""
 		}
@@ -1625,291 +1581,18 @@ proc RunCustomizeSizeByLoad { args } {
 set currDir [file dirname [info script]]
 puts "Package Directory $currDir"
 
-#Anish (Added if else loop for ngpf)
-#Commented the sourcing of the files that are yet to be changed to NGPF(exclude Traffic related Files)
+#We will add leftover packages once implemented for NGPF
 if {$ngpfMode != 0} {
-	puts "load package Ixia_Util..."
+	puts "load package IxiaNgpfNet..."
 	if { [ catch {
-		source [file join $currDir Ixia_Util.tcl]
-	} err ] } {
-		if { [ catch {
-				source [file join $currDir Ixia_Util.tbc]
-		} tbcErr ] } {
-			puts "load package fail...$err $tbcErr"
-		}
-	} 
-	puts "load package Ixia_NetObj..."
-	if { [ catch {
-		source [file join $currDir Ixia_NetObj.tcl]
-	} err ] } {
-		if { [ catch {
-				source [file join $currDir Ixia_NetObj.tbc]
-		} tbcErr ] } {
-			puts "load package fail...$err $tbcErr"
-		}
-	} 
-	# puts "load package Ixia_NetTester..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetTester.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetTester.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	puts "load package Ixia_NetPort..."
-	if { [ catch {
-		source [file join $currDir Ixia_NetNgpfPort.tcl]
-	} err ] } {
-		if { [ catch {
-				source [file join $currDir Ixia_NetNgpfPort.tbc]
-		} tbcErr ] } {
-			puts "load package fail...$err $tbcErr"
-		}
-	} 
-	# puts "load package Ixia_NetTraffic..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetTraffic.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetTraffic.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# }
-	# puts "load package Ixia_NetFlow..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetFlow.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_N
-	#etFlow.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetDhcp..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetDhcp.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetDhcp.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# }
-	# puts "load package Ixia_NetDhcpPD..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetDhcpPD.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetDhcpPD.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetIgmp..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetIgmp.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetIgmp.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetCapture..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetCapture.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetCapture.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetCaptureFilter..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetCaptureFilter.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetCaptureFilter.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	puts "load package Ixia_NetOspf..."
-	if { [ catch {
-	 	source [file join $currDir Ixia_NetNgpfOspf.tcl]
+	 	source [file join $currDir IxiaNgpfNet.tcl]
 	} err ] } {
 	 	if { [ catch {
-	 			source [file join $currDir Ixia_NetNgpfOspf.tbc]
+	 			source [file join $currDir IxiaNgpfNet.tbc]
 	 	} tbcErr ] } {
 	 		puts "load package fail...$err $tbcErr"
 	 	}
-	 }
-	# puts "load package Ixia_NetL3Vpn6Vpe..." 
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetL3Vpn6Vpe.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetL3Vpn6Vpe.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetLdp..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetLdp.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetLdp.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetIsis..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetIsis.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetIsis.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetTrill..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetTrill.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetTrill.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetDcbx..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetDcbx.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetDcbx.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetFcoe..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetFcoe.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetFcoe.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetPPPoX..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetPPPoX.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetPPPoX.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	puts "load package Ixia_NetBgp..."
-	if { [ catch {
-		source [file join $currDir Ixia_NetNgpfBgp.tcl]
-	} err ] } {
-		if { [ catch {
-				source [file join $currDir Ixia_NetNgpfBgp.tbc]
-		} tbcErr ] } {
-			puts "load package fail...$err $tbcErr"
-		}
 	}
-	# puts "load package Ixia_NetRfc2544..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetRFC2544.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetRFC2544.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetRfc3918..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetRFC3918.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetRFC3918.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# }
-	# puts "load package Ixia_NetDot1xRate..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetDot1xRate.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetDot1xRate.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetRip..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetRip.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetRip.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetPim...."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetPim.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetPim.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetBfd...."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetBfd.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetBfd.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
-	# puts "load package Ixia_NetDeviceGroup...."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetDeviceGroup.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetDeviceGroup.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# }
-
-	# puts "load package Ixia_NetL2TP..."
-	# if { [ catch {
-	# 	source [file join $currDir Ixia_NetL2TP.tcl]
-	# } err ] } {
-	# 	if { [ catch {
-	# 			source [file join $currDir Ixia_NetL2TP.tbc]
-	# 	} tbcErr ] } {
-	# 		puts "load package fail...$err $tbcErr"
-	# 	}
-	# } 
 } else {
 	
 	puts "load package Ixia_Util..."
@@ -2209,8 +1892,7 @@ if { $::tcl_platform(platform) == "windows" } {
 	package require registry
 
     if { [ catch {
-		#Anish
-        # set ixN_lib "[ GetEnvTcl IxNetwork ]/TclScripts/lib/IxTclNetwork"
+		# set ixN_lib "[ GetEnvTcl IxNetwork ]/TclScripts/lib/IxTclNetwork"
 		set ixN_lib "C:/Program Files (x86)/Ixia/IxNetwork/8.50-EA-SP1/API/TCL/IxTclNetwork"
 	    lappend auto_path  $ixN_lib
     } err ] } {
