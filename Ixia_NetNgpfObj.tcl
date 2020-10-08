@@ -27,7 +27,7 @@ class NetNgpfObject {
     set tag "body NetNgpfObject::unconfig [info script]"
 Deputs "----- TAG: $tag -----"
 		catch {
-			ixNet remove $handle networkGroup
+			ixNet remove $handle
 			ixNet commit
 		}
 		set handle ""
@@ -112,15 +112,53 @@ Deputs "----- TAG: $tag -----"
 		}
 		
 		if { $onStack == "null" } {
-Deputs "new ethernet stack"
+            Deputs "new ethernet stack"
 			#-- add ethernet stack
-			set sg_ethernet [ixNet add $hPort/protocolStack ethernet]
-			ixNet setMultiAttrs $sg_ethernet \
-				-name {MAC/VLAN-1}
-			ixNet commit
-			set sg_ethernet [lindex [ixNet remapIds $sg_ethernet] 0]
-			#-- ethernet stack will be used in unconfig to clear all the stack
-			set stack $sg_ethernet	
+			set topoObjList [ixNet getL [ixNet getRoot] topology]
+            Deputs "topoObjList: $topoObjList"
+            set vportList [ixNet getL [ixNet getRoot] vport]
+            set vport [ lindex $vportList end ]
+            if {[llength $topoObjList] != [llength $vportList]} {
+                foreach topoObj $topoObjList {
+                    set vportObj [ixNet getA $topoObj -vports]
+                    foreach vport $vportList {
+                        if {$vportObj != $vport && $vport == $hPort} {
+                            set sg_ethernet [CreateProtoHandleFromRoot $hPort]
+                            set sg_ethernet [ixNet remapIds $sg_ethernet]
+                            set stack $sg_ethernet
+                        }
+                    }
+                    break
+                }
+            }
+            set topoObjList [ixNet getL [ixNet getRoot] topology]
+            if { [ llength $topoObjList ] == 0 } {
+                set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
+                ixNet commit
+                set topoObj [ixNet remapIds $topoObj]
+                set deviceGroupObj [ixNet add $topoObj deviceGroup]
+                ixNet commit
+                ixNet setA $deviceGroupObj -multiplier 1
+                ixNet commit
+                set sg_ethernet [ixNet add $deviceGroupObj ethernet]
+                ixNet commit
+                set sg_ethernet [ixNet remapIds $sg_ethernet]
+                set sg_ethernet [lindex [ixNet remapIds $sg_ethernet] 0]
+                #-- ethernet stack will be used in unconfig to clear all the stack
+                set stack $sg_ethernet
+            } else {
+                foreach topoObj $topoObjList {
+                    set vportObj [ixNet getA $topoObj -vports]
+                    if {$vportObj == $hPort} {
+                        set deviceGroupList [ixNet getL $topoObj deviceGroup]
+                        foreach deviceGroupObj $deviceGroupList {
+                            set ethernetList [ixNet getL $deviceGroupObj ethernet]
+                            set sg_ethernet [lindex [ixNet remapIds $ethernetList] 0]
+                            set stack $sg_ethernet
+                        }
+                    }
+                }
+            }
 		}		
     }
 	
@@ -293,145 +331,146 @@ body ProtocolNgpfStackObject::config { args } {
     }
 	
     set range $handle
-	
+    set ethernetObj [GetDependentNgpfProtocolHandle $handle "ethernet"]
     if { [ info exists mac_addr ] } {
-        ixNet setA $range/macRange -mac $mac_addr
+        ixNet setM [ixNet getA $ethernetObj -mac]/counter -start $mac_addr -direction "increment"
     }
     if { [ info exists mac_addr_step ] } {
-        ixNet setA $range/macRange -incrementBy $mac_addr_step
+        ixNet setM [ixNet getA $ethernetObj -mac]/counter -step $mac_addr_step
     }
+    ixNet setA [ixNet getA $ethernetObj -enableVlans]/singleValue -value False
+    ixNet commit
 
-	foreach vlan [ ixNet getL $range/vlanRange vlanIdInfo ] {
-		if { [ catch {
-			ixNet remove $vlan
-		} err ] } {
-			Deputs "remove existing vlan id $range/vlanRange err:$err"
-		}
-	}
-	catch { ixNet commit }
-
-Deputs "vlan id info cnt:[ llength [ ixNet getL $range/vlanRange vlanIdInfo ] ]"	
-	
-    set outer_vlan ""
+    if { [ info exists inner_vlan_id ] && [ info exists outer_vlan_id ] } {
+	    set vlan_count 2
+    } else {
+        set vlan_count 1
+    }
+    ixNet setA $ethernetObj -vlanCount $vlan_count
+    ixNet commit
 	set version [ixNet getVersion]
 	Deputs "The ixNetwork version is: $version"
-
-    # if { [ info exists outer_vlan_enable ] } {
-	    # if {[string match 6.0* $version]} {
-		    # set outer_vlan [ixNet add $range vlanRange]
-	    # } else {
-		    # set outer_vlan [ixNet add $range/vlanRange vlanIdInfo]
-	    # }
-    
-	# ixNet commit
-	# set outer_vlan [ ixNet remapIds $outer_vlan ]
-        # ixNet setA $outer_vlan -enabled $outer_vlan_enable
-    # }
-    
     if { [ info exists outer_vlan_enable ] || [ info exists outer_vlan_id ] } {
 
 	    if {[string match 6.0* $version]} {
-		    set outer_vlan [ixNet add $range vlanRange]
+		    #set outer_vlan [ixNet add $range vlanRange]
+		    Deputs "Not implemented for IxNetwork version $version"
 	    } else {
-		    set outer_vlan [ixNet add $range/vlanRange vlanIdInfo]
+		    ixNet setA [ixNet getA $ethernetObj -enableVlans]/singleValue -value True
 	    }
+	}
     
-	ixNet commit
-	set outer_vlan [ ixNet remapIds $outer_vlan ]
-	    if {[ info exists outer_vlan_enable ] } {
-		} else {
-		    set outer_vlan_enable true
-		}
-        ixNet setA $outer_vlan -enabled $outer_vlan_enable
-    }
-    
-    
+    set vlanCount [ixNet getA $ethernetObj -vlanCount]
+    set outerValnObj [lindex [ixNet getL $ethernetObj vlan] 0]
     if { [ info exists outer_vlan_id ] } {
-        ixNet setA $outer_vlan -firstId $outer_vlan_id
+        ixNet setM [ixNet getA $outerValnObj -vlanId]/counter -start $outer_vlan_id -direction increment
+        ixNet commit
     }
     
     if { [ info exists outer_vlan_step ] } {
-Deputs "outer_vlan_step:$outer_vlan_step"	
-        ixNet setA $outer_vlan -increment $outer_vlan_step
+        Deputs "outer_vlan_step:$outer_vlan_step"
+        ixNet setA [ixNet getA $outerValnObj -vlanId]/counter -step $outer_vlan_step
     }
-    
+    if { [ info exists outer_vlan_repeat_count ] || [ info exists outer_vlan_num ] } {
+        ixNet setA [ixNet getA $outerValnObj -vlanId] -pattern custom
+        ixNet commit
+        set incrementObj [ixNet add [ixNet getA $outerValnObj -vlanId]/custom increment]
+        ixNet commit
+        if { [ info exists outer_vlan_step ] } {
+            ixNet setA $incrementObj -value $outer_vlan_step
+        } else {
+            ixNet setA $incrementObj -value 1
+        }
+        set incObj [ixNet add $incrementObj increment]
+        ixNet commit
+    }
 	if { [ info exists outer_vlan_repeat_count ] } {
-		ixNet setA $outer_vlan -incrementStep $outer_vlan_repeat_count
+		ixNet setA $incObj -count $outer_vlan_repeat_count
 	}
     
     if { [ info exists outer_vlan_num ] } {
-        ixNet setA $outer_vlan -uniqueCount $outer_vlan_num
+        ixNet setA $incrementObj -count $outer_vlan_num
     }
     
     if { [ info exists outer_vlan_priority ] } {
-        ixNet setA $outer_vlan -priority $outer_vlan_priority
+        ixNet setA [ixNet getA $outerValnObj -priority]/singleValue -value $outer_vlan_priority
     }
 
 	ixNet commit
-    set inner_vlan ""
-	set version [ixNet getVersion]
+    set version [ixNet getVersion]
 	Deputs "The ixNetwork version is: $version"
     set verval [string match 6.0* $version]
     if { [ info exists inner_vlan_enable ] } {
         Deputs "inner vlan enabled..."
+
 	    if {$verval == 1} {
-		    set inner_vlan [ixNet add $range vlanRange]
+		    #ixNet setA $ethernetObj -innerEnable True
+		    Deputs "Not implemented for IxNetwork version $version"
 	    } else {
-		    set inner_vlan [ixNet add $range/vlanRange vlanIdInfo]
-	    }
-		ixNet commit
-		set inner_vlan [ ixNet remapIds $inner_vlan ]
-	    if {$verval == 1} {
-		    ixNet setA $inner_vlan -innerEnable $inner_vlan_enable
-	    } else {
-		    ixNet setA $inner_vlan -enabled $inner_vlan_enable 
+		    ixNet setA [ixNet getA $ethernetObj -enableVlans]/singleValue -value True
 	    }
     }
-    
+    set innerValnObj [lindex [ixNet getL $ethernetObj vlan] end]
     if { [ info exists inner_vlan_id ] } {
 	    if {$verval == 1} {
-		    ixNet setA $inner_vlan -innerFirstId $inner_vlan_id
+		    #ixNet setA $inner_vlan -innerFirstId $inner_vlan_id
+		    Deputs "Not implemented for IxNetwork version $version"
 	    } else {
-		    ixNet setA $inner_vlan -firstId $inner_vlan_id
+		    ixNet setM [ixNet getA $innerValnObj -vlanId]/counter -start $inner_vlan_id -direction increment
+            ixNet commit
 	    }
     }
     
     if { [ info exists inner_vlan_step ] } {
 	    if {$verval == 1} {
-		    ixNet setA $inner_vlan -innerIncrement $inner_vlan_step
+		    #ixNet setA $inner_vlan -innerIncrement $inner_vlan_step
+		    Deputs "Not implemented for IxNetwork version $version"
 	    } else {
-		    ixNet setA $inner_vlan -increment $inner_vlan_step
+		    ixNet setA [ixNet getA $innerValnObj -vlanId]/counter -step $inner_vlan_step
 	    }		
     }
-    
+    if { [ info exists inner_vlan_repeat_count ] || [ info exists inner_vlan_num ] } {
+        ixNet setA [ixNet getA $innerValnObj -vlanId] -pattern custom
+        ixNet commit
+        set incrementObj [ixNet add [ixNet getA $innerValnObj -vlanId]/custom increment]
+        ixNet commit
+        if { [ info exists outer_vlan_step ] } {
+            ixNet setA $incrementObj -value $inner_vlan_step
+        } else {
+            ixNet setA $incrementObj -value 1
+        }
+        set incObj [ixNet add $incrementObj increment]
+        ixNet commit
+    }
 	if { [ info exists inner_vlan_repeat_count ] } {
 		if {$verval == 1} {
-			ixNet setA $inner_vlan -innerIncrementStep $inner_vlan_repeat_count
+			#ixNet setA $inner_vlan -innerIncrementStep $inner_vlan_repeat_count
+			Deputs "Not implemented for IxNetwork version $version"
 		} else {
-			ixNet setA $inner_vlan -incrementStep $inner_vlan_repeat_count
+			ixNet setA $incObj -count $inner_vlan_repeat_count
 		}
 		
 	}
-    
     if { [ info exists inner_vlan_num ] } {
 	    if {$verval ==1} {
-		    ixNet setA $inner_vlan -innerUniqueCount $inner_vlan_num
+		    #ixNet setA $inner_vlan -innerUniqueCount $inner_vlan_num
+		    Deputs "Not implemented for IxNetwork version $version"
 	    } else {
-		    ixNet setA $inner_vlan -uniqueCount $inner_vlan_num
+		    ixNet setA $incrementObj -count $inner_vlan_num
 	    }
 	
     }
     
     if { [ info exists inner_vlan_priority ] } {
 	    if {$verval ==1} {
-		    ixNet setA $inner_vlan -innerPriority $inner_vlan_priority
+		    #ixNet setA $inner_vlan -innerPriority $inner_vlan_priority
+		    Deputs "Not implemented for IxNetwork version $version"
 	    } else {
-		    ixNet setA $inner_vlan -priority $inner_vlan_priority
+		    ixNet setA [ixNet getA $innerValnObj -priority]/singleValue -value $inner_vlan_priority
 	    }       
     }
     
     ixNet commit
-
 }
 
 class RouterNgpfEmulationObject {

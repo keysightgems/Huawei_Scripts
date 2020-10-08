@@ -36,18 +36,113 @@ proc GetOspfNgpfRouterHandle {handle {option 0}} {
 		return $returnHandle
 }
 
-proc GetDependentNgpfProtocolHandle {handle option} {
-    set result [regexp {(.*)(topology:[0-9]+)/(deviceGroup:[0-9]+).*([0-9]):(.*)$} $handle match match1 match2 match3 match4]
-	set devHandle [join $match1/$match2/$match3]
-	if {$option == "deviceGroup"} {
-		return $devHandle
-	} elseif {$option == "networkGroup"} {
-		set networkGroupHandles [ixNet getL devHandle "networkGroup"]
-		return $networkGroupHandles
-	} elseif {$option == "isisL3Router"} {
-		set isisHandle [ixNet getL $devicehandle isisL3Router]
-		return isisHandle
+proc CreateNgpfProtocolView {protocol {type "Per Port"}} {
+    set r_no [expr {int(rand()*100000)}]
+    set view [ixNet add /statistics view]
+    ixNet setMultiAttribute $view -pageTimeout 25 \
+                                                    -type layer23NextGenProtocol \
+                                                    -caption view_$r_no \
+                                                    -visible true -autoUpdate true \
+                                                    -viewCategory NextGenProtocol
+    ixNet commit
+    set view [lindex [ixNet remapIds $view] 0]
+
+    set advCv [ixNet add $view "advancedCVFilters"]
+    ixNet setMultiAttribute $advCv -grouping \"$type\" \
+                                                     -protocol \{$protocol\} \
+                                                     -sortingStats {}
+    ixNet commit
+    set advCv [lindex [ixNet remapIds $advCv] 0]
+
+    set ngp [ixNet add $view layer23NextGenProtocolFilter]
+    ixNet setMultiAttribute $ngp -advancedFilterName \"No\ Filter\" \
+                                                   -advancedCVFilter $advCv \
+                                                   -protocolFilterIds [list ] -portFilterIds [list ]
+    ixNet commit
+    set ngp [lindex [ixNet remapIds $ngp] 0]
+
+    set stats [ixNet getList $view statistic]
+    foreach stat $stats {
+         ixNet setA $stat -scaleFactor 1
+		 ixNet setA $stat -enabled true
+		 ixNet setA $stat -aggregationType sum
+		 ixNet commit
+    }
+	ixNet setA $view -enabled true
+	ixNet commit
+    ixNet execute refresh $view
+	return $view
 	}
+
+proc GetDependentNgpfProtocolHandle {handle option} {
+    # set result [regexp {(.*)(topology:[0-9]+)/(deviceGroup:[0-9]+).*([0-9]):(.*)$} $handle match match1 match2 match3 match4]
+    set result [regexp {(.*)(topology:[0-9]+)\/(deviceGroup:[0-9]+)\/(ethernet:[0-9]+)\/([a-z|A-Z]+[0-9]?:[0-9]+)(.*)$} $handle match match1 match2 match3 match4 match5 match6]
+    Deputs "match $match match1 $match1 match2 $match2 match3 $match3 match4 $match4 match5 $match5 match6 $match6"
+    set devHandle [join $match1/$match2/$match3]
+    if {$option == "deviceGroup"} {
+        return $devHandle
+    } elseif {$option == "ethernet"} {
+        set ethHandle [join $match1/$match2/$match3/$match4]
+        return $ethHandle
+    } elseif {$option == "ip"} {
+        set ipHandle [join $match1/$match2/$match3/$match4/$match5]
+        Deputs "returning ipHandle $ipHandle"
+        return $ipHandle
+    } elseif {$option == "networkGroup"} {
+        set networkGroupHandles [ixNet getL $devHandle "networkGroup"]
+        return $networkGroupHandles
+    } elseif {$option == "isisL3Router"} {
+        set isisRouterHandle [ixNet getL $devHandle isisL3Router]
+        return $isisRouterHandle
+    } elseif {$option == "isisL3"} {
+        set ethHandle [join $match1/$match2/$match3/$match4]
+        set isisHandle [ixNet getL $ethHandle isisL3]
+        return $isisHandle
+    } elseif {$option == "ipv4PrefixPools"} {
+        set networkGroupHandles [ixNet getL $devHandle "networkGroup"]
+        if {$networkGroupHandles == ""} {
+            return ""
+        }
+        set ipv4PoolObj [ixNet getL $networkGroupHandles "ipv4PrefixPools"]
+        return $ipv4PoolObj
+    } elseif {$option == "ipv6PrefixPool"} {
+        set networkGroupHandles [ixNet getL $devHandle "networkGroup"]
+        if {$networkGroupHandles == ""} {
+            return ""
+        }
+        set ipv6PoolObj [ixNet getL $networkGroupHandles "ipv6PrefixPools"]
+        return $ipv6PoolObj
+    }
+}
+
+## This proc creates required stack NGPF from root.
+proc CreateProtoHandleFromRoot {port {stack ""} {ipVersion ""}} {
+    set topoObj [ixNet add [ixNet getRoot] topology -vports $port]
+    ixNet commit
+    set deviceGroupObj [ixNet add $topoObj deviceGroup]
+    ixNet commit
+    ixNet setA $deviceGroupObj -multiplier "1"
+    ixNet commit
+    set ethObj [ixNet add $deviceGroupObj ethernet]
+    ixNet commit
+    if {$stack == ""} {
+        set handle $ethObj
+    } elseif {$ipVersion == "ipv4"} {
+        set ipv4Obj [ixNet add $ethObj ipv4]
+        ixNet commit
+        set handle [ixNet add $ipv4Obj $stack]
+        ixNet commit
+    } elseif {$ipVersion == "ipv6"} {
+        set ipv6Obj [ixNet add $ethObj ipv6]
+        ixNet commit
+        set handle [ixNet add $ipv6Obj $stack]
+        ixNet commit
+    } elseif {$ipVersion == ""} {
+        set handle [ixNet add $ethObj $stack]
+        ixNet commit
+    }
+    set handle [ixNet remapIds $handle]
+    return $handle
 }
 
 proc GenerateProtocolsNgpfObjects { portObj } {
@@ -720,6 +815,7 @@ if { [ catch {
 		puts "load package fail...$err $tbcErr"
 	}
 }
+
 puts "load package Ixia_NetNgpfOspf..."
 if { [ catch {
 	source [file join $currDir Ixia_NetNgpfOspf.tcl]
@@ -730,7 +826,60 @@ if { [ catch {
 		puts "load package fail...$err $tbcErr"
 	}
 }
+puts "load package Ixia_NetNgpfIsis..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfIsis.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetNgpfIsis.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+}
 
+puts "load package Ixia_NetNgpfDhcp..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfDhcp.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetNgpfDhcp.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+}
+
+puts "load package Ixia_NetNgpfDot1xRate..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfDot1xRate.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetNgpfDot1xRate.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+}
+
+puts "load package Ixia_NetNgpfTraffic..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfTraffic.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetNgpfTraffic.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+}
+
+puts "load package Ixia_NetNgpfTester..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfTester.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetNgpfTester.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+}
 
 #IxDebugOn
 #IxDebugCmdOn
