@@ -423,35 +423,25 @@ body BgpSession::config { args } {
                     }
                 }
                 if { [ info exists ipv6_addr ] } {
-                    #if { $ip_version == "ipv6" } {
-                    #    set ipv6Obj [ixNet getL $ethernetObj ipv6]
-                    #    set bgpObj [ixNet getL $ipv6Obj bgpIpv6Peer]
-                    #    if {$bgpObj == ""} {
-                    #        set bgpObj [ixNet add $ipv6Obj bgpIpv6Peer]
-                    #        ixNet commit
-                    #        set bgpV6Obj [ ixNet remapIds $bgpObj ]
-                    #    } else {
-                    #        set bgpV6Obj $bgpObj
-                    #    }
-                    #} else {
-                        set ipv6Obj [ixNet getL $ethernetObj ipv6]
-                        if {$ipv6Obj == ""} {
-                            set ipv6Obj [ixNet add $ethernetObj ipv6]
-                            ixNet commit
-                            set bgpObj [ixNet add $ipv6Obj bgpIpv6Peer]
-                            ixNet commit
-                            set bgpV6Obj [ ixNet remapIds $bgpObj ]
-                        } else {
-                            set bgpObj [ixNet getL $ipv6Obj bgpIpv6Peer]
-                            if {$bgpObj == ""} {
-                                set bgpObj [ixNet add $ipv6Obj bgpIpv6Peer]
-                                ixNet commit
-                                set bgpV6Obj [ ixNet remapIds $bgpObj ]
-                            } else {
-                                set bgpV6Obj $bgpObj
-                            }
-                        }
-                    #}
+                    
+			set ipv6Obj [ixNet getL $ethernetObj ipv6]
+			if {$ipv6Obj == ""} {
+			    set ipv6Obj [ixNet add $ethernetObj ipv6]
+			    ixNet commit
+			    set bgpObj [ixNet add $ipv6Obj bgpIpv6Peer]
+			    ixNet commit
+			    set bgpV6Obj [ ixNet remapIds $bgpObj ]
+			} else {
+			    set bgpObj [ixNet getL $ipv6Obj bgpIpv6Peer]
+			    if {$bgpObj == ""} {
+				set bgpObj [ixNet add $ipv6Obj bgpIpv6Peer]
+				ixNet commit
+				set bgpV6Obj [ ixNet remapIds $bgpObj ]
+			    } else {
+				set bgpV6Obj $bgpObj
+			    }
+			}
+                    
                     if { [llength $ipv6Obj] != 0 } {
                         ixNet setA [ixNet getA $ipv6Obj -address]/singleValue -value $ipv6_addr
                         ixNet commit
