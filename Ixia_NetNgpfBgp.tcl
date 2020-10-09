@@ -207,13 +207,16 @@ body BgpSession::reborn { {version ipv4}  } {
         ixNet setA $deviceGroupObj -multiplier 1
         ixNet commit
         set ethernetObj [ixNet add $deviceGroupObj ethernet]
+	ixNet commit
         if { $ip_version == "ipv4" } {
             set ipv4Obj [ixNet add $ethernetObj ipv4]
+	    ixNet commit
             set bgpObj [ixNet add $ipv4Obj bgpIpv4Peer]
             ixNet commit
         }
         if { $ip_version == "ipv6" } {
             set ipv6Obj [ixNet add $ethernetObj ipv6]
+	    ixNet commit
             set bgpObj [ixNet add $ipv6Obj bgpIpv6Peer]
             ixNet commit
             ixNet setA [ixNet getA $bgpObj -dutIp]/singleValue -value "0:0:0:0:0:0:0:0"
