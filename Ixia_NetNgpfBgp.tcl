@@ -207,16 +207,16 @@ body BgpSession::reborn { {version ipv4}  } {
         ixNet setA $deviceGroupObj -multiplier 1
         ixNet commit
         set ethernetObj [ixNet add $deviceGroupObj ethernet]
-	ixNet commit
+        ixNet commit
         if { $ip_version == "ipv4" } {
             set ipv4Obj [ixNet add $ethernetObj ipv4]
-	    ixNet commit
+            ixNet commit
             set bgpObj [ixNet add $ipv4Obj bgpIpv4Peer]
             ixNet commit
         }
         if { $ip_version == "ipv6" } {
             set ipv6Obj [ixNet add $ethernetObj ipv6]
-	    ixNet commit
+            ixNet commit
             set bgpObj [ixNet add $ipv6Obj bgpIpv6Peer]
             ixNet commit
             ixNet setA [ixNet getA $bgpObj -dutIp]/singleValue -value "0:0:0:0:0:0:0:0"
@@ -423,17 +423,43 @@ body BgpSession::config { args } {
                     }
                 }
                 if { [ info exists ipv6_addr ] } {
-                    if { $ip_version == "ipv6" } {
+                    #if { $ip_version == "ipv6" } {
+                    #    set ipv6Obj [ixNet getL $ethernetObj ipv6]
+                    #    set bgpObj [ixNet getL $ipv6Obj bgpIpv6Peer]
+                    #    if {$bgpObj == ""} {
+                    #        set bgpObj [ixNet add $ipv6Obj bgpIpv6Peer]
+                    #        ixNet commit
+                    #        set bgpV6Obj [ ixNet remapIds $bgpObj ]
+                    #    } else {
+                    #        set bgpV6Obj $bgpObj
+                    #    }
+                    #} else {
                         set ipv6Obj [ixNet getL $ethernetObj ipv6]
-                        if { [llength $ipv6Obj] != 0 } {
-                            ixNet setA [ixNet getA $ipv6Obj -address]/singleValue -value $ipv6_addr
-                            ixNet commit
-                        } else {
+                        if {$ipv6Obj == ""} {
                             set ipv6Obj [ixNet add $ethernetObj ipv6]
                             ixNet commit
-                            ixNet setA [ixNet getA $ipv6Obj -address]/singleValue -value $ipv6_addr
+                            set bgpObj [ixNet add $ipv6Obj bgpIpv6Peer]
                             ixNet commit
+                            set bgpV6Obj [ ixNet remapIds $bgpObj ]
+                        } else {
+                            set bgpObj [ixNet getL $ipv6Obj bgpIpv6Peer]
+                            if {$bgpObj == ""} {
+                                set bgpObj [ixNet add $ipv6Obj bgpIpv6Peer]
+                                ixNet commit
+                                set bgpV6Obj [ ixNet remapIds $bgpObj ]
+                            } else {
+                                set bgpV6Obj $bgpObj
+                            }
                         }
+                    #}
+                    if { [llength $ipv6Obj] != 0 } {
+                        ixNet setA [ixNet getA $ipv6Obj -address]/singleValue -value $ipv6_addr
+                        ixNet commit
+                    } else {
+                        set ipv6Obj [ixNet add $ethernetObj ipv6]
+                        ixNet commit
+                        ixNet setA [ixNet getA $ipv6Obj -address]/singleValue -value $ipv6_addr
+                        ixNet commit
                     }
                 }
                 if { [ info exists ipv4_gw ] } {
@@ -467,9 +493,9 @@ body BgpSession::config { args } {
                             if { [llength $bgpObj] == 0 } {
                                 set bgpObj [ixNet add $ipv6Obj bgpIpv6Peer]
                                 ixNet commit
-                                set bgpObj [ ixNet remapIds $bgpObj ]
+                                set bgpV6Obj [ ixNet remapIds $bgpObj ]
                             } else {
-                                set bgpObj [ixNet getL $ipv6Obj bgpIpv6Peer]
+                                set bgpV6Obj [ixNet getL $ipv6Obj bgpIpv6Peer]
                             }
                         }
                     } else {
@@ -482,16 +508,17 @@ body BgpSession::config { args } {
                             set bgpObj [ixNet getL $ipv4Obj bgpIpv4Peer]
                         }
                     }
-                } else {
+                }
+                if { $ip_version == "ipv6" } {
                     set ipv6Obj [ixNet getL $ethernetObj ipv6]
                     if { [llength $ipv6Obj] != 0 } {
                         set bgpObj [ixNet getList $ipv6Obj bgpIpv6Peer]
                         if { [llength $bgpObj] == 0 } {
                             set bgpObj [ixNet add $ipv6Obj bgpIpv6Peer]
                             ixNet commit
-                            set bgpObj [ ixNet remapIds $bgpObj ]
+                            set bgpV6Obj [ ixNet remapIds $bgpObj ]
                         } else {
-                            set bgpObj [ixNet getL $ipv6Obj bgpIpv6Peer]
+                            set bgpV6Obj [ixNet getL $ipv6Obj bgpIpv6Peer]
                         }
                     } else {
                         set ipv6Obj [ixNet add $ethernetObj ipv6]
@@ -500,12 +527,28 @@ body BgpSession::config { args } {
                         if { [llength $bgpObj] == 0 } {
                             set bgpObj [ixNet add $ipv6Obj bgpIpv6Peer]
                             ixNet commit
-                            set bgpObj [ ixNet remapIds $bgpObj ]
+                            set bgpV6Obj [ ixNet remapIds $bgpObj ]
                         }
                     }
                 }
+
+                if {[ info exists ipv4_addr ] } {
+                    set bgpObj $bgpObj
+                } else {
+                    set bgpObj ""
+                }
+                if {[ info exists ipv6_addr ] } {
+                    set bgpV6Obj $bgpV6Obj
+                } else {
+                    set bgpV6Obj ""
+                }
                 if { [ info exists type ] } {
-                    ixNet setA [ixNet getA $bgpObj -type]/singleValue -value $type
+                    if {$bgpObj != ""} {
+                        ixNet setA [ixNet getA $bgpObj -type]/singleValue -value $type
+                    }
+                    if {$bgpV6Obj != ""} {
+                        ixNet setA [ixNet getA $bgpV6Obj -type]/singleValue -value $type
+                    }
                 }
                 if { [ info exists afi ] } {
                     Deputs "not implemented parameter: afi"
@@ -514,13 +557,25 @@ body BgpSession::config { args } {
                     Deputs "not implemented parameter: safi"
                 }
                 if { [ info exists as ] } {
-                    ixNet setA [ixNet getA $bgpObj -localAs2Bytes]/singleValue -value $as
-                    ixNet commit
+                    if {$bgpObj != ""} {
+                        ixNet setA [ixNet getA $bgpObj -localAs2Bytes]/singleValue -value $as
+                        ixNet commit
+                    }
+                    if {$bgpV6Obj != ""} {
+                        ixNet setA [ixNet getA $bgpV6Obj -localAs2Bytes]/singleValue -value $as
+                        ixNet commit
+                    }
                 }
                 if { [ info exists dut_ip ] } {
                     Deputs "dut_ip:$dut_ip"
-                    ixNet setA [ixNet getA $bgpObj -dutIp]/singleValue -value $dut_ip
-                    ixNet commit
+                    if {$bgpObj != ""} {
+                        ixNet setA [ixNet getA $bgpObj -dutIp]/singleValue -value $dut_ip
+                        ixNet commit
+                    }
+                    if {$bgpV6Obj != ""} {
+                        ixNet setA [ixNet getA $bgpV6Obj -dutIp]/singleValue -value $dut_ip
+                        ixNet commit
+                    }
                 }
                 if { [ info exists dut_as ] } {
                     Deputs "not implemented parameter: dut_as"
@@ -540,8 +595,14 @@ body BgpSession::config { args } {
                 if { [ info exists bgp_id ] } {
                     set routeDataObj [ixNet getL $deviceGroupObj routerData]
                     ixNet setA [ixNet getA $routeDataObj -routerId]/singleValue -value $bgp_id
-                    ixNet setA [ixNet getA $bgpObj -bgpId]/singleValue -value $bgp_id
-                    ixNet commit
+                    if {$bgpObj != ""} {
+                        ixNet setA [ixNet getA $bgpObj -bgpId]/singleValue -value $bgp_id
+                        ixNet commit
+                    }
+                    if {$bgpV6Obj != ""} {
+                        ixNet setA [ixNet getA $bgpV6Obj -bgpId]/singleValue -value $bgp_id
+                        ixNet commit
+                    }
                 }
                 if { [ info exists ipv6_addr ] } {
                     set ipv6Obj [ixNet getL $ethernetObj ipv6]
@@ -550,15 +611,30 @@ body BgpSession::config { args } {
                 }
 
                 if { [ info exists enable_flap ] } {
-                    ixNet setA [ixNet getA $bgpObj -flap]/singleValue -value $enable_flap
+                    if {$bgpObj != ""} {
+                        ixNet setA [ixNet getA $bgpObj -flap]/singleValue -value $enable_flap
+                    }
+                    if {$bgpV6Obj != ""} {
+                        ixNet setA [ixNet getA $bgpV6Obj -flap]/singleValue -value $enable_flap
+                    }
                 }
 
                 if { [ info exists flap_down_time ] } {
-                    ixNet setA [ixNet getA $bgpObj -downtimeInSec]/singleValue -value $flap_down_time
+                    if {$bgpObj != ""} {
+                        ixNet setA [ixNet getA $bgpObj -downtimeInSec]/singleValue -value $flap_down_time
+                    }
+                    if {$bgpV6Obj != ""} {
+                        ixNet setA [ixNet getA $bgpV6Obj -downtimeInSec]/singleValue -value $flap_down_time
+                    }
                 }
 
                 if { [ info exists flap_up_time ] } {
-                    ixNet setA [ixNet getA $bgpObj -uptimeInSec]/singleValue -value $flap_up_time
+                    if {$bgpObj != ""} {
+                        ixNet setA [ixNet getA $bgpObj -uptimeInSec]/singleValue -value $flap_up_time
+                    }
+                    if {$bgpV6Obj != ""} {
+                        ixNet setA [ixNet getA $bgpV6Obj -uptimeInSec]/singleValue -value $flap_up_time
+                    }
                 }
                 ixNet commit
             }
