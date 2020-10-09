@@ -179,6 +179,7 @@ body BgpSession::reborn { {version ipv4}  } {
 			foreach vport $vportList {
 				if {$vportObj != $vport && $vport == $hPort} {
 				    set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
+				    ixNet commit
 					set deviceGroupObj [ixNet add $topoObj deviceGroup]
 					ixNet commit
 					ixNet setA $deviceGroupObj -multiplier 1
@@ -202,6 +203,7 @@ body BgpSession::reborn { {version ipv4}  } {
 
     if { [ llength $topoObjList ] == 0 } {
         set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
+	ixNet commit
         set deviceGroupObj [ixNet add $topoObj deviceGroup]
         ixNet commit
         ixNet setA $deviceGroupObj -multiplier 1
