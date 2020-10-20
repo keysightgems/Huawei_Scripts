@@ -75,8 +75,8 @@ proc CreateNgpfProtocolView {protocol {type "Per Port"}} {
 	}
 
 proc GetDependentNgpfProtocolHandle {handle option} {
-    # set result [regexp {(.*)(topology:[0-9]+)/(deviceGroup:[0-9]+).*([0-9]):(.*)$} $handle match match1 match2 match3 match4]
-    set result [regexp {(.*)(topology:[0-9]+)\/(deviceGroup:[0-9]+)\/(ethernet:[0-9]+)\/([a-z|A-Z]+[0-9]?:[0-9]+)(.*)$} $handle match match1 match2 match3 match4 match5 match6]
+    #set result [regexp {(.*)(topology:[0-9]+)\/(deviceGroup:[0-9]+)\/(ethernet:[0-9]+)\/([a-z|A-Z]+[0-9]?:[0-9]+)(.*)$} $handle match match1 match2 match3 match4 match5 match6]
+    set result [regexp {(.*)(topology:[0-9]+)\/(deviceGroup:[0-9]+)\/(ethernet:[0-9]+)\/(.*)} $handle match match1 match2 match3 match4 match5 match6]
     Deputs "match $match match1 $match1 match2 $match2 match3 $match3 match4 $match4 match5 $match5 match6 $match6"
     set devHandle [join $match1/$match2/$match3]
     if {$option == "deviceGroup"} {
@@ -117,6 +117,7 @@ proc GetDependentNgpfProtocolHandle {handle option} {
 
 ## This proc creates required stack NGPF from root.
 proc CreateProtoHandleFromRoot {port {stack ""} {ipVersion ""}} {
+
     set topoObj [ixNet add [ixNet getRoot] topology -vports $port]
     ixNet commit
     set deviceGroupObj [ixNet add $topoObj deviceGroup]
@@ -266,6 +267,38 @@ proc GenerateProtocolsNgpfObjects { portObj } {
     }
 }
 
+proc GetIpV46Step { type pLen step} {
+    if {$type == "ipv4"} {
+        if {$pLen == 8} {
+            set stepvalue [string replace "0.0.0.0" 0 0 $step]
+        } elseif  {$pLen == 16} {
+            set stepvalue [string replace "0.0.0.0" 2 2 $step]
+        } elseif  {$pLen == 24} {
+            set stepvalue [string replace "0.0.0.0" 4 4 $step]
+        } else {
+            set stepvalue [string replace "0.0.0.0" 6 6 $step]
+        }
+    } else {
+        if {$pLen == 16} {
+            set stepvalue [string replace "0:0:0:0:0:0:0:0" 0 0 $step]
+        } elseif  {$pLen == 32} {
+            set stepvalue [string replace "0:0:0:0:0:0:0:0" 2 2 $step]
+        } elseif  {$pLen == 48} {
+            set stepvalue [string replace "0:0:0:0:0:0:0:0" 4 4 $step]
+        } elseif  {$pLen == 64} {
+            set stepvalue [string replace "0:0:0:0:0:0:0:0" 6 6 $step]
+        } elseif  {$pLen == 80} {
+            set stepvalue [string replace "0:0:0:0:0:0:0:0" 8 8 $step]
+        } elseif  {$pLen == 96} {
+            set stepvalue [string replace "0:0:0:0:0:0:0:0" 10 10 $step]
+        } elseif  {$pLen == 112} {
+            set stepvalue [string replace "0:0:0:0:0:0:0:0" 12 12 $step]
+        } else {
+            set stepvalue [string replace "0:0:0:0:0:0:0:0" 14 14 $step]
+        }
+    }
+    return $stepvalue
+}
 
 proc GetAllPortNgpfObj {} {
     set portObj [list]

@@ -1003,7 +1003,7 @@ Deputs "objects:$objects"
 	foreach obj $objects {
 Deputs "obj:$obj"
 		if { [ catch {
-			if { [ $obj isa NetObject ] } {
+			if { [ $obj isa NetNgpfObject ] } {
 Deputs Step10
 				if { [ $obj isa Port ] } {
 Deputs Step20
