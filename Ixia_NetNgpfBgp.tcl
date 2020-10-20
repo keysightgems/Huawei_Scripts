@@ -179,7 +179,7 @@ body BgpSession::reborn { {version ipv4}  } {
 			foreach vport $vportList {
 				if {$vportObj != $vport && $vport == $hPort} {
 				    set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
-				    ixNet commit
+					ixNet commit
 					set deviceGroupObj [ixNet add $topoObj deviceGroup]
 					ixNet commit
 					ixNet setA $deviceGroupObj -multiplier 1
@@ -203,8 +203,8 @@ body BgpSession::reborn { {version ipv4}  } {
 
     if { [ llength $topoObjList ] == 0 } {
         set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
-	ixNet commit
-        set deviceGroupObj [ixNet add $topoObj deviceGroup]
+        ixNet commit
+		set deviceGroupObj [ixNet add $topoObj deviceGroup]
         ixNet commit
         ixNet setA $deviceGroupObj -multiplier 1
         ixNet commit
@@ -631,6 +631,7 @@ body BgpSession::config { args } {
             }
         }
     }
+    ixNet exec applyOnTheFly  ::ixNet::OBJ-/globals/topology
     return [GetStandardReturnHeader]
 
 }
@@ -710,18 +711,12 @@ body BgpSession::set_route { args } {
                 ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -start $start -direction increment
                 ixNet commit
             }
-
             if { $prefix_len != "" } {
                 if {$type == "ipv4"} {
-                    set pLen 24
-                    if {$prefix_len == "255.0.0.0"} {
-                        set pLen 8
-                    } elseif  {$prefix_len == "255.255.0.0"} {
-                        set pLen 16
-                    } elseif  {$prefix_len == "255.255.255.0"} {
-                        set pLen 24
+                    if {[string first "." $prefix_len] != -1} {
+                        set pLen [SubnetToPrefixlenV4 $prefix_len]
                     } else {
-                        set pLen 32
+                        set pLen $prefix_len
                     }
                 } else {
                     set pLen $prefix_len
@@ -730,35 +725,7 @@ body BgpSession::set_route { args } {
                 ixNet commit
             }
             if { $step != "" } {
-                if {$type == "ipv4"} {
-                    if {$pLen == 8} {
-                        set stepvalue [string replace "0.0.0.0" 0 0 $step]
-                    } elseif  {$pLen == 16} {
-                        set stepvalue [string replace "0.0.0.0" 2 2 $step]
-                    } elseif  {$pLen == 24} {
-                        set stepvalue [string replace "0.0.0.0" 4 4 $step]
-                    } else {
-                        set stepvalue [string replace "0.0.0.0" 6 6 $step]
-                    }
-                } else {
-                    if {$pLen == 16} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 0 0 $step]
-                    } elseif  {$pLen == 32} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 2 2 $step]
-                    } elseif  {$pLen == 48} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 4 4 $step]
-                    } elseif  {$pLen == 64} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 6 6 $step]
-                    } elseif  {$pLen == 80} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 8 8 $step]
-                    } elseif  {$pLen == 96} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 10 10 $step]
-                    } elseif  {$pLen == 112} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 12 12 $step]
-                    } else {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 14 14 $step]
-                    }
-                }
+                set stepvalue [GetIpV46Step $type $pLen $step]
                 ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -step $stepvalue
                 ixNet commit
             }
@@ -954,7 +921,7 @@ body BgpSession::set_route { args } {
             }
 
             ixNet commit
-
+            ixNet exec applyOnTheFly  ::ixNet::OBJ-/globals/topology
 			$rb configure -handle $networkGroupObj
 			$rb configure -portObj $portObj
 			$rb configure -hPort $hPort
@@ -990,7 +957,6 @@ body BgpSession::advertise_route { args } {
         ixNet commit
 	} else {
         if { $LoadConfigMode } {
-            #set devicehandle [$this cget -deviceHandle]
             set devicehandle [GetDependentNgpfProtocolHandle $bgpHandle "deviceGroup"]
             set routeRangeList  [ixNet getL $devicehandle networkGroup]
             if { $routeRangeList != "" } {
@@ -1028,14 +994,16 @@ body BgpSession::advertise_route { args } {
             }
             ixNet commit
         } else {
-
-            foreach hRouteBlock $routeBlock(obj) {
-                Deputs "hRouteBlock : $hRouteBlock"
-                ixNet setA [ixNet getA $hRouteBlock -enabled]/singleValue -value True
-            }
+                set devicehandle [GetDependentNgpfProtocolHandle $bgpHandle "deviceGroup"]
+                set routeRangeList  [ixNet getL $devicehandle networkGroup]
+                foreach hRouteBlock $routeRangeList {
+                    Deputs "hRouteBlock : $hRouteBlock"
+                    ixNet setA [ixNet getA $hRouteBlock -enabled]/singleValue -value True
+                }
         }
 	}
 	ixNet commit
+	ixNet exec applyOnTheFly  ::ixNet::OBJ-/globals/topology
 	return [GetStandardReturnHeader]
 
 }
@@ -1104,12 +1072,15 @@ body BgpSession::withdraw_route { args } {
             }
             ixNet commit
         } else {
-            foreach hRouteBlock $routeBlock(obj) {
+            set devicehandle [GetDependentNgpfProtocolHandle $bgpHandle "deviceGroup"]
+            set routeRangeList  [ixNet getL $devicehandle networkGroup]
+            foreach hRouteBlock $routeRangeList {
                 ixNet setA [ixNet getA $hRouteBlock -enabled]/singleValue -value False
             }
         }
 	}
 	ixNet commit
+	ixNet exec applyOnTheFly  ::ixNet::OBJ-/globals/topology
 	return [GetStandardReturnHeader]
 
 }
@@ -1307,14 +1278,10 @@ body SimRoute::config { args } {
             }
             if { $prefix_len != "" } {
                 if {$type == "ipv4"} {
-                    if {$prefix_len == "255.0.0.0"} {
-                        set pLen 8
-                    } elseif  {$prefix_len == "255.255.0.0"} {
-                        set pLen 16
-                    } elseif  {$prefix_len == "255.255.255.0"} {
-                        set pLen 24
+                    if {[string first "." $prefix_len] != -1} {
+                        set pLen [SubnetToPrefixlenV4 $prefix_len]
                     } else {
-                        set pLen 32
+                        set pLen $prefix_len
                     }
                 } else {
                     set pLen $prefix_len
@@ -1324,35 +1291,7 @@ body SimRoute::config { args } {
                 ixNet commit
             }
             if { $step != "" } {
-                if {$type == "ipv4"} {
-                    if {$pLen == 8} {
-                        set stepvalue [string replace "0.0.0.0" 0 0 $step]
-                    } elseif  {$pLen == 16} {
-                        set stepvalue [string replace "0.0.0.0" 2 2 $step]
-                    } elseif  {$pLen == 24} {
-                        set stepvalue [string replace "0.0.0.0" 4 4 $step]
-                    } else {
-                        set stepvalue [string replace "0.0.0.0" 6 6 $step]
-                    }
-                } else {
-                    if {$pLen == 16} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 0 0 $step]
-                    } elseif  {$pLen == 32} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 2 2 $step]
-                    } elseif  {$pLen == 48} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 4 4 $step]
-                    } elseif  {$pLen == 64} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 6 6 $step]
-                    } elseif  {$pLen == 80} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 8 8 $step]
-                    } elseif  {$pLen == 96} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 10 10 $step]
-                    } elseif  {$pLen == 112} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 12 12 $step]
-                    } else {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 14 14 $step]
-                    }
-                }
+                set stepvalue [GetIpV46Step $type $pLen $step]
                 ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -step $stepvalue
                 ixNet commit
             }
@@ -1708,15 +1647,10 @@ body Vpn::set_route { args } {
 			set pLen 24
             if { $prefix_len != "" } {
                 if {$type == "ipv4"} {
-                    set pLen 24
-                    if {$prefix_len == "255.0.0.0"} {
-                        set pLen 8
-                    } elseif  {$prefix_len == "255.255.0.0"} {
-                        set pLen 16
-                    } elseif  {$prefix_len == "255.255.255.0"} {
-                        set pLen 24
+                    if {[string first "." $prefix_len] != -1} {
+                        set pLen [SubnetToPrefixlenV4 $prefix_len]
                     } else {
-                        set pLen 32
+                        set pLen $prefix_len
                     }
                 } else {
                     set pLen $prefix_len
@@ -1725,35 +1659,7 @@ body Vpn::set_route { args } {
                 ixNet commit
             }
             if { $step != "" } {
-                if {$type == "ipv4"} {
-                    if {$pLen == 8} {
-                        set stepvalue [string replace "0.0.0.0" 0 0 $step]
-                    } elseif  {$pLen == 16} {
-                        set stepvalue [string replace "0.0.0.0" 2 2 $step]
-                    } elseif  {$pLen == 24} {
-                        set stepvalue [string replace "0.0.0.0" 4 4 $step]
-                    } else {
-                        set stepvalue [string replace "0.0.0.0" 6 6 $step]
-                    }
-                } else {
-                    if {$pLen == 16} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 0 0 $step]
-                    } elseif  {$pLen == 32} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 2 2 $step]
-                    } elseif  {$pLen == 48} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 4 4 $step]
-                    } elseif  {$pLen == 64} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 6 6 $step]
-                    } elseif  {$pLen == 80} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 8 8 $step]
-                    } elseif  {$pLen == 96} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 10 10 $step]
-                    } elseif  {$pLen == 112} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 12 12 $step]
-                    } else {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 14 14 $step]
-                    }
-                }
+                set stepvalue [GetIpV46Step $type $pLen $step]
                 ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -step $stepvalue
                 ixNet commit
             }

@@ -117,7 +117,6 @@ Deputs "----- TAG: $tag -----"
 			set topoObjList [ixNet getL [ixNet getRoot] topology]
             Deputs "topoObjList: $topoObjList"
             set vportList [ixNet getL [ixNet getRoot] vport]
-            set vport [ lindex $vportList end ]
             if {[llength $topoObjList] != [llength $vportList]} {
                 foreach topoObj $topoObjList {
                     set vportObj [ixNet getA $topoObj -vports]
