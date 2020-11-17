@@ -182,7 +182,7 @@ Deputs "onStack:$onStack"
 		# }
      
         if {  $LoadConfigMode == 0 && $hProtocol == "null"} {
-			reborn $onStack
+            reborn $onStack
 		} 
     }
 	
@@ -327,6 +327,7 @@ body ProtocolNgpfStackObject::config { args } {
 	
     if { $handle == "" } {
 	    reborn
+        set handle $stack
     }
 	
     set range $handle

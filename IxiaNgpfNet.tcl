@@ -19,6 +19,7 @@ proc GetEnxNgpfInfo { args } {
     }
 
 }
+
 proc GetOspfNgpfRouterHandle {handle {option 0}} {
     set result [regexp {(.*)(topology:[0-9]+)/(deviceGroup:[0-9]+).*([0-9]):(.*)$} $handle match match1 match2 match3 match4]
 	set devHandle [join $match1/$match2/$match3]
@@ -34,6 +35,87 @@ proc GetOspfNgpfRouterHandle {handle {option 0}} {
 		return $version
 	}
 		return $returnHandle
+}
+
+proc getTopoHandle {portHandle} {
+	set topoList [ list ]
+	set topoObj [ixNet getL [ixNet getRoot] topology]
+	Deputs "topoObj :$topoObj"
+	foreach topo $topoObj {
+		foreach port $portHandle {
+		set vport [ixNet getA $topo -vports]
+		if {$vport == $port} {
+			lappend topoList $topo
+			}
+			}
+		}
+		return $topoList
+}
+
+dict set protocolGlobalTlvHandle "dhcpv4client" "/globals/topology/dhcpv4client/tlvEditor/defaults/template:1"
+dict set protocolGlobalTlvHandle "dhcpv6client" "/globals/topology/dhcpv6client/tlvEditor/defaults/template:1"
+#dict set protocolGlobalTlvHandle "dhcp" "::ixNet::OBJ-/globals/topology/dhcpv4client/tlvEditor/defaults/template:1"
+proc getGlobalProtocolHandle {protocol} {
+	global protocolGlobalTlvHandle
+	return [dict get $protocolGlobalTlvHandle $protocol]
+}
+
+proc addTlvHandle {handle codeTlv} {
+	# set tlvEntry [lindex [ixNet getL ::ixNet::OBJ-/globals/topology/dhcpv4client/tlvEditor/defaults/template:1 tlv] $templateIndex]
+	set tlvHandle [ixNet execute copyTlv $handle/tlvProfile $codeTlv]
+	ixNet commit
+	set Handle [lindex [split $tlvHandle ,\}] 1]
+	return $Handle
+}
+
+proc getTlvHandleFromTlvProfileCode {handle tlvCode} {
+	set tlvList [ixNet getL $handle/tlvProfile tlv]
+	foreach tlvEntry $tlvList {
+		set objList [ixNet getL $tlvEntry/value object]
+
+		foreach tlvEntry $objList {
+			set tlvName [ixNet getA $tlvEntry -name]
+			set result [regexp {\[(\d+)\]} $tlvName tlv code]
+			if {$code == $tlvCode} {
+				return $tlvEntry
+			}
+		}
+	}
+}
+
+proc getTlvHandleFromDefaultTlvCode {protocol tlvCode} {
+	set dhcpGlobalTlvTemplate [getGlobalProtocolHandle $protocol]
+	set defaultTlvList [ixNet getL $dhcpGlobalTlvTemplate tlv]
+	foreach tlvEntry $defaultTlvList {
+		set tlvName [ixNet getA $tlvEntry -name]
+		set result [regexp {\[(\d+)\]} $tlvName tlv code]
+		if {$code == $tlvCode} {
+			# Deputs "returing handle $tlvEntry"
+			return $tlvEntry
+		}
+	}
+}
+
+proc findIfTlvExist {handle codeTlv} {
+    set defaultTlv [ixNet getL $handle/tlvProfile defaultTlv]
+    if {$defaultTlv != ""} {
+        set tlvName [ixNet getA $defaultTlv -name]
+        set result [regexp {(\d+)} $tlvName tlv code]
+        if {$code == $codeTlv} {
+            return $defaultTlv
+        }
+    }
+    set tlvList [ixNet getL $handle/tlvProfile tlv]
+    if {$tlvList != ""} {
+        foreach tlvEntry $tlvList {
+            set tlvName [ixNet getA $tlvEntry -name]
+            set result [regexp {(\d+)} $tlvName tlv code]
+            if {$code == $codeTlv} {
+                return $tlvEntry
+            }
+        }
+    }
+    return ""
 }
 
 proc CreateNgpfProtocolView {protocol {type "Per Port"}} {
@@ -74,50 +156,86 @@ proc CreateNgpfProtocolView {protocol {type "Per Port"}} {
 	return $view
 	}
 
-proc GetDependentNgpfProtocolHandle {handle option} {
-    #set result [regexp {(.*)(topology:[0-9]+)\/(deviceGroup:[0-9]+)\/(ethernet:[0-9]+)\/([a-z|A-Z]+[0-9]?:[0-9]+)(.*)$} $handle match match1 match2 match3 match4 match5 match6]
-    set result [regexp {(.*)(topology:[0-9]+)\/(deviceGroup:[0-9]+)\/(ethernet:[0-9]+)\/(.*)} $handle match match1 match2 match3 match4 match5 match6]
-    Deputs "match $match match1 $match1 match2 $match2 match3 $match3 match4 $match4 match5 $match5 match6 $match6"
-    set devHandle [join $match1/$match2/$match3]
-    if {$option == "deviceGroup"} {
-        return $devHandle
-    } elseif {$option == "ethernet"} {
-        set ethHandle [join $match1/$match2/$match3/$match4]
-        return $ethHandle
-    } elseif {$option == "ip"} {
-        set ipHandle [join $match1/$match2/$match3/$match4/$match5]
-        Deputs "returning ipHandle $ipHandle"
-        return $ipHandle
-    } elseif {$option == "networkGroup"} {
-        set networkGroupHandles [ixNet getL $devHandle "networkGroup"]
-        return $networkGroupHandles
-    } elseif {$option == "isisL3Router"} {
-        set isisRouterHandle [ixNet getL $devHandle isisL3Router]
-        return $isisRouterHandle
-    } elseif {$option == "isisL3"} {
-        set ethHandle [join $match1/$match2/$match3/$match4]
-        set isisHandle [ixNet getL $ethHandle isisL3]
-        return $isisHandle
-    } elseif {$option == "ipv4PrefixPools"} {
-        set networkGroupHandles [ixNet getL $devHandle "networkGroup"]
-        if {$networkGroupHandles == ""} {
-            return ""
+proc SetMultiValues {protocolObj attr ipPattern {value ""} {stepValue ""} } {
+    if { $ipPattern == "singleValue" } {
+        ixNet setA [ixNet getA $protocolObj $attr]/singleValue -value $value
+        ixNet commit
+    } elseif { $ipPattern == "counter" } {
+        if {$value == "" || $value == " "} {
+            Deputs ""
+        } else {
+            ixNet setA [ixNet getA $protocolObj $attr]/counter -start $value
         }
-        set ipv4PoolObj [ixNet getL $networkGroupHandles "ipv4PrefixPools"]
-        return $ipv4PoolObj
-    } elseif {$option == "ipv6PrefixPool"} {
-        set networkGroupHandles [ixNet getL $devHandle "networkGroup"]
-        if {$networkGroupHandles == ""} {
-            return ""
+        if {$stepValue == "" || $stepValue == " "} {
+            Deputs ""
+        } else {
+            ixNet setA [ixNet getA $protocolObj $attr]/counter -step $stepValue
         }
-        set ipv6PoolObj [ixNet getL $networkGroupHandles "ipv6PrefixPools"]
-        return $ipv6PoolObj
+        ixNet commit
+    } elseif { $ipPattern == "custom" } {
+        if {$value == "" || $value == " "} {
+            Deputs ""
+        } else {
+            ixNet setA [ixNet getA $protocolObj $attr]/custom -start $value
+        }
+        if {$stepValue == "" || $stepValue == " "} {
+            Deputs ""
+        } else {
+            ixNet setA [ixNet getA $protocolObj $attr]/custom -step $stepValue
+        }
+        ixNet commit
+    } elseif { $ipPattern == "valueList" } {
+        ixNet setA [ixNet getA $protocolObj $attr]/valueList -values {$value}
+        ixNet commit
+    } elseif { $ipPattern == "string" } {
+        ixNet setA [ixNet getA $protocolObj $attr]/string -pattern $value
+        ixNet commit
     }
+}
+
+proc GetMultiValues {protocolObj attr ipPattern} {
+    if { $ipPattern == "singleValue" } {
+        set value [ixNet getA [ixNet getA $protocolObj $attr]/singleValue -value]
+        return $value
+    } elseif { $ipPattern == "counter" } {
+        set value [ixNet getA [ixNet getA $protocolObj $attr]/counter -start]
+        return $value
+    } elseif { $ipPattern == "custom" } {
+        set value [ixNet getA [ixNet getA $protocolObj $attr]/custom -start]
+        return $value
+    } elseif { $ipPattern == "valueList" } {
+        set value [ixNet getA [ixNet getA $protocolObj $attr]/valueList -values]
+        return $value
+    } elseif { $ipPattern == "string" } {
+        set value [ixNet getA [ixNet getA $protocolObj $attr]/string -pattern]
+        return $value
+    }
+}
+
+proc GetDependentNgpfProtocolHandle {Object {level 1} {occ 0}} {
+    if {[regexp {.+/addrPool:\d+-\d+-per-\d+} $Object]} {
+        set pool_items [GetAddrPoolItems $Object]
+        set Object [split $Object {/}]
+        set Object [join [lrange $Object 0 [expr {[llength $Object] - 2}]] "/"]
+    }
+    if {![regexp {^\d+$} $level]} {
+        if {$occ == 0} {
+            set index [lsearch -regexp [split $Object {/}] $level]
+        } else {
+            set index [lsearch -regexp -all [split $Object {/}] $level]
+            set index [lindex $index end]
+        }
+        if {$index == -1} {error "Error: Could not get the parent from $Object for $level"}
+        set level [expr { [llength [split $Object {/}]] - $index } - 1]
+    }
+    for {set i 1} {$i <= $level} {incr i} {
+        set Object [ixNet getParent $Object]
+    }
+    return $Object
 }
 
 ## This proc creates required stack NGPF from root.
 proc CreateProtoHandleFromRoot {port {stack ""} {ipVersion ""}} {
-
     set topoObj [ixNet add [ixNet getRoot] topology -vports $port]
     ixNet commit
     set deviceGroupObj [ixNet add $topoObj deviceGroup]
@@ -126,7 +244,7 @@ proc CreateProtoHandleFromRoot {port {stack ""} {ipVersion ""}} {
     ixNet commit
     set ethObj [ixNet add $deviceGroupObj ethernet]
     ixNet commit
-    if {$stack == ""} {
+    if {$stack == "" || $stack == "ethernet"} {
         set handle $ethObj
     } elseif {$ipVersion == "ipv4"} {
         set ipv4Obj [ixNet add $ethObj ipv4]
@@ -269,32 +387,40 @@ proc GenerateProtocolsNgpfObjects { portObj } {
 
 proc GetIpV46Step { type pLen step} {
     if {$type == "ipv4"} {
-        if {$pLen == 8} {
-            set stepvalue [string replace "0.0.0.0" 0 0 $step]
-        } elseif  {$pLen == 16} {
-            set stepvalue [string replace "0.0.0.0" 2 2 $step]
-        } elseif  {$pLen == 24} {
-            set stepvalue [string replace "0.0.0.0" 4 4 $step]
+        if {[string first "." $step] == -1} {
+            if {$pLen == 8} {
+                set stepvalue [string replace "0.0.0.0" 0 0 $step]
+            } elseif  {$pLen == 16} {
+                set stepvalue [string replace "0.0.0.0" 2 2 $step]
+            } elseif  {$pLen == 24} {
+                set stepvalue [string replace "0.0.0.0" 4 4 $step]
+            } else {
+                set stepvalue [string replace "0.0.0.0" 6 6 $step]
+            }
         } else {
-            set stepvalue [string replace "0.0.0.0" 6 6 $step]
+            set stepvalue $step
         }
     } else {
-        if {$pLen == 16} {
-            set stepvalue [string replace "0:0:0:0:0:0:0:0" 0 0 $step]
-        } elseif  {$pLen == 32} {
-            set stepvalue [string replace "0:0:0:0:0:0:0:0" 2 2 $step]
-        } elseif  {$pLen == 48} {
-            set stepvalue [string replace "0:0:0:0:0:0:0:0" 4 4 $step]
-        } elseif  {$pLen == 64} {
-            set stepvalue [string replace "0:0:0:0:0:0:0:0" 6 6 $step]
-        } elseif  {$pLen == 80} {
-            set stepvalue [string replace "0:0:0:0:0:0:0:0" 8 8 $step]
-        } elseif  {$pLen == 96} {
-            set stepvalue [string replace "0:0:0:0:0:0:0:0" 10 10 $step]
-        } elseif  {$pLen == 112} {
-            set stepvalue [string replace "0:0:0:0:0:0:0:0" 12 12 $step]
+        if {[string first ":" $step] == -1} {
+            if {$pLen == 16} {
+                set stepvalue [string replace "0:0:0:0:0:0:0:0" 0 0 $step]
+            } elseif  {$pLen == 32} {
+                set stepvalue [string replace "0:0:0:0:0:0:0:0" 2 2 $step]
+            } elseif  {$pLen == 48} {
+                set stepvalue [string replace "0:0:0:0:0:0:0:0" 4 4 $step]
+            } elseif  {$pLen == 64} {
+                set stepvalue [string replace "0:0:0:0:0:0:0:0" 6 6 $step]
+            } elseif  {$pLen == 80} {
+                set stepvalue [string replace "0:0:0:0:0:0:0:0" 8 8 $step]
+            } elseif  {$pLen == 96} {
+                set stepvalue [string replace "0:0:0:0:0:0:0:0" 10 10 $step]
+            } elseif  {$pLen == 112} {
+                set stepvalue [string replace "0:0:0:0:0:0:0:0" 12 12 $step]
+            } else {
+                set stepvalue [string replace "0:0:0:0:0:0:0:0" 14 14 $step]
+            }
         } else {
-            set stepvalue [string replace "0:0:0:0:0:0:0:0" 14 14 $step]
+            set stepvalue $step
         }
     }
     return $stepvalue
@@ -909,6 +1035,58 @@ if { [ catch {
 } err ] } {
 	if { [ catch {
 			source [file join $currDir Ixia_NetNgpfTester.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+}
+
+puts "load package Ixia_NetCapture..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfCapture.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetNgpfCapture.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+}
+
+puts "load package Ixia_NetCaptureFilter..."
+if { [ catch {
+	source [file join $currDir Ixia_NetCaptureFilter.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetCaptureFilter.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+}
+puts "load package Ixia_NetNgpfPPPoX..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfPPPoX.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetNgpfPPPoX.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+}
+puts "load package Ixia_NetNgpfIgmp..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfIgmp.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetNgpfIgmp.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+}
+puts "load package Ixia_NetNgpfLdp.."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfLdp.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetNgpfLdp.tbc]
 	} tbcErr ] } {
 		puts "load package fail...$err $tbcErr"
 	}

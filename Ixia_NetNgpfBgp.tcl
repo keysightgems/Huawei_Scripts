@@ -177,23 +177,31 @@ body BgpSession::reborn { {version ipv4}  } {
         foreach topoObj $topoObjList {
             set vportObj [ixNet getA $topoObj -vports]
 			foreach vport $vportList {
-				if {$vportObj != $vport && $vport == $hPort} {
-				    set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
-					ixNet commit
-					set deviceGroupObj [ixNet add $topoObj deviceGroup]
-					ixNet commit
-					ixNet setA $deviceGroupObj -multiplier 1
-					ixNet commit
-					set ethernetObj [ixNet add $deviceGroupObj ethernet]
-					ixNet commit
-					if { $ip_version == "ipv4" } {
-						set ipv4Obj [ixNet add $ethernetObj ipv4]
-						ixNet commit
-					}
-					if { $ip_version == "ipv6" } {
-						set ipv6Obj [ixNet add $ethernetObj ipv6]
-						ixNet commit
-					}
+			    if {$vportObj != $vport && $vport == $hPort} {
+				    set vportTopoList ""
+				    foreach topoObj $topoObjList {
+                        set vportObj [ixNet getA $topoObj -vports]
+                        lappend vportTopoList $vportObj
+                    }
+                    if {[string first $hPort $vportTopoList] == -1} {
+
+                        set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
+                        ixNet commit
+                        set deviceGroupObj [ixNet add $topoObj deviceGroup]
+                        ixNet commit
+                        ixNet setA $deviceGroupObj -multiplier 1
+                        ixNet commit
+                        set ethernetObj [ixNet add $deviceGroupObj ethernet]
+                        ixNet commit
+                        if { $ip_version == "ipv4" } {
+                            set ipv4Obj [ixNet add $ethernetObj ipv4]
+                            ixNet commit
+                        }
+                        if { $ip_version == "ipv6" } {
+                            set ipv6Obj [ixNet add $ethernetObj ipv6]
+                            ixNet commit
+                        }
+                    }
 				}
 			}
             break
@@ -1570,6 +1578,7 @@ body Vpn::set_route { args } {
 	set asNumber 100
 	set assignedNumber 1
 	set ipNumber 0.0.0.0
+
     set deviceGroupObj [GetDependentNgpfProtocolHandle $bgpVrfObj "deviceGroup"]
     #param collection
     Deputs "Args:$args "
@@ -1611,12 +1620,40 @@ body Vpn::set_route { args } {
 			puts "num:$num, step:$step, prefix_len:$prefix_len, start:$start, type:$type"
 
             if { $handle == "" } {
-                set networkGroupObj [ ixNet getL $deviceGroupObj "networkGroup" ]
-                if { [ llength $networkGroupObj ] == 0 } {		   
+                set networkGroupObjList [ ixNet getL $deviceGroupObj "networkGroup" ]
+                if { [ llength $networkGroupObjList ] != 0 } {
+                    foreach networkGroupObj $networkGroupObjList {
+                        if {$type == "ipv4"} {
+                            set ipPoolObj [ixNet getL $networkGroupObj "ipv4PrefixPools"]
+                            if { [ llength $ipPoolObj ] != 0 } {
+                                if {[llength [ixNet getL $ipPoolObj bgpL3VpnRouteProperty]] != 0} {
+                                    set networkGroupObj $networkGroupObj
+                                    break
+                                } else {
+                                    set networkGroupObj [ixNet add $deviceGroupObj "networkGroup"]
+                                    ixNet commit
+                                    set networkGroupObj [ ixNet remapIds $networkGroupObj ]
+                                }
+                            }
+                        } else {
+                            set ipPoolObj [ixNet getL $networkGroupObj "ipv6PrefixPools"]
+                            if { [ llength $ipPoolObj ] != 0 } {
+                                if {[llength [ixNet getL $ipPoolObj bgpV6L3VpnRouteProperty]] != 0} {
+                                    set networkGroupObj $networkGroupObj
+                                    break
+                                } else {
+                                    set networkGroupObj [ixNet add $deviceGroupObj "networkGroup"]
+                                    ixNet commit
+                                    set networkGroupObj [ ixNet remapIds $networkGroupObj ]
+                                }
+                            }
+                        }
+                    }
+                } else {
                     set networkGroupObj [ixNet add $deviceGroupObj "networkGroup"]
                     ixNet commit
                     set networkGroupObj [ ixNet remapIds $networkGroupObj ]
-				}
+                }
 			}
 
             set routeBlock($rb,handle) $networkGroupObj
@@ -1629,14 +1666,26 @@ body Vpn::set_route { args } {
 			
 			if { $start != "" } {
                 if {$type == "ipv4"} {
-                    set ipPoolObj [ixNet add $networkGroupObj "ipv4PrefixPools"]
-                    ixNet setM $ipPoolObj -addrStepSupported true -name "Basic\ IPv4\ Addresses\ 1"
-		            ixNet commit
+                    set ipPoolObj [ixNet getL $networkGroupObj "ipv4PrefixPools"]
+                    if { [ llength $ipPoolObj ] == 0 } {
+                        set ipPoolObj [ixNet add $networkGroupObj "ipv4PrefixPools"]
+                        ixNet setM $ipPoolObj -addrStepSupported true -name "Basic\ IPv4\ Addresses\ 1"
+                        ixNet commit
+                    } else {
+                        ixNet setM $ipPoolObj -addrStepSupported true -name "Basic\ IPv4\ Addresses\ 1"
+                        ixNet commit
+                    }
                 }
                 if {$type == "ipv6"} {
-                    set ipPoolObj [ixNet add $networkGroupObj "ipv6PrefixPools"]
-                    ixNet setM $ipPoolObj -addrStepSupported true -name "Basic\ IPv6\ Addresses\ 1"
-		            ixNet commit
+                    set ipPoolObj [ixNet getL $networkGroupObj "ipv6PrefixPools"]
+                    if { [ llength $ipPoolObj ] == 0 } {
+                        set ipPoolObj [ixNet add $networkGroupObj "ipv6PrefixPools"]
+                        ixNet setM $ipPoolObj -addrStepSupported true -name "Basic\ IPv6\ Addresses\ 1"
+                        ixNet commit
+                    } else {
+                        ixNet setM $ipPoolObj -addrStepSupported true -name "Basic\ IPv6\ Addresses\ 1"
+                        ixNet commit
+                    }
 		        }
 		        set connector [ixNet add $ipPoolObj connector]
                 ixNet setA $connector -connectedTo $bgpVrfObj

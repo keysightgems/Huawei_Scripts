@@ -1259,6 +1259,7 @@ proc SearchMinFrameSizeByLoad { args } {
 	foreach { key value } $args {
         set key [string tolower $key]
         switch -exact -- $key {
+            -frame_size_list -
             -frame_len {
                 set frame_size_list $value
             }
