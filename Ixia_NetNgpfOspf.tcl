@@ -194,7 +194,7 @@ Deputs "router_id:$router_id"
 	# v3 -interfaceType pointToPoint, -interfaceType broadcast
 	# v2 -networkType pointToPoint, -networkType broadcast, -networkType pointToMultipoint
 	if { [ info exists network_type ] } {
-	
+	    set network_type [string toupper $network_type]
 		switch $network_type {
 		
 			NATIVE {
@@ -207,8 +207,7 @@ Deputs "router_id:$router_id"
 				set network_type pointtopoint
 			}
 		}
-
-		ixNet setA [ixNet getA $handle -networkType]/singleValue -value $network_type
+        ixNet setA [ixNet getA $handle -networkType]/singleValue -value $network_type
 		ixNet commit
 		
 	}
@@ -997,16 +996,16 @@ Deputs "Args:$args "
                 ixNet setA $loopbackInt/unconnected \
                     -connectedVia $viaInt
                 ixNet commit
-                set hInt [ ixNet add $handle interface ]
-                ixNet setM $hInt \
-                    -interfaceIpAddress $loopback_ipv4_addr \
-                    -interfaceIpMaskAddress 255.255.255.255 \
-                    -enabled True \
-                    -connectedToDut False \
-                    -linkTypes stub
+                #set hInt [ ixNet add $handle interface ]
+                #ixNet setM $hInt \
+                #    -interfaceIpAddress $loopback_ipv4_addr \
+                #    -interfaceIpMaskAddress 255.255.255.255 \
+                #    -enabled True \
+                #    -connectedToDut False \
+                #    -linkTypes stub
 
-                ixNet commit
-                set interface($loopbackInt) $hInt
+                #ixNet commit
+                #set interface($loopbackInt) $hInt
             }
 	}
 	}
@@ -1628,33 +1627,7 @@ Deputs "Args:$args "
 
                 }
 			}
-	        if { [ info exists loopback_ipv6_addr ] } {
-                Deputs "loopback_ipv6_addr is not implemented "
-                catch { Host $this.loopback $portObj }
-                $this.loopback config \
-                    -ipv4_addr $loopback_ipv4_addr \
-                    -unconnected 1 \
-                    -ipv4_prefix_len 32 \
-                    -ipv4_gw $loopback_ipv4_gw
-                set loopbackInt [ $this.loopback cget -handle ]
-                Deputs "loopback int:$loopbackInt"
-                set viaInt [ lindex $rb_interface end ]
-                Deputs "via interface:$viaInt"
-                ixNet setA $loopbackInt/unconnected \
-                    -connectedVia $viaInt
-                ixNet commit
-                set hInt [ ixNet add $handle interface ]
-                ixNet setM $hInt \
-                    -interfaceIpAddress $loopback_ipv4_addr \
-                    -interfaceIpMaskAddress 255.255.255.255 \
-                    -enabled True \
-                    -connectedToDut False \
-                    -linkTypes stub
-
-                ixNet commit
-                set interface($loopbackInt) $hInt
-	        }
-	}
+	    }
 	}
 	ixNet commit
 	eval chain $args
