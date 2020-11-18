@@ -1040,7 +1040,7 @@ if { [ catch {
 	}
 }
 
-puts "load package Ixia_NetCapture..."
+puts "load package Ixia_NetNgpfCapture..."
 if { [ catch {
 	source [file join $currDir Ixia_NetNgpfCapture.tcl]
 } err ] } {
@@ -1051,12 +1051,12 @@ if { [ catch {
 	}
 }
 
-puts "load package Ixia_NetCaptureFilter..."
+puts "load package Ixia_NetNgpfCaptureFilter..."
 if { [ catch {
-	source [file join $currDir Ixia_NetCaptureFilter.tcl]
+	source [file join $currDir Ixia_NetNgpfCaptureFilter.tcl]
 } err ] } {
 	if { [ catch {
-			source [file join $currDir Ixia_NetCaptureFilter.tbc]
+			source [file join $currDir Ixia_NetNgpfCaptureFilter.tbc]
 	} tbcErr ] } {
 		puts "load package fail...$err $tbcErr"
 	}
