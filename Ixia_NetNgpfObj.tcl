@@ -505,7 +505,6 @@ class RouterNgpfEmulationObject {
 	method flapping_route { args } {
 		set tag "body RouterNgpfEmulationObject::flapping_route [info script]"
         Deputs "----- TAG: $tag -----"
-		
 		global loginInfo
 		#set a2w 10
 		#set w2a 10
@@ -560,13 +559,13 @@ class RouterNgpfEmulationObject {
 				set hFlap [ $rb cget -handle ]
 				lappend hFlapList $hFlap
 			}
-			
+
             Deputs "hFlapList:$hFlapList"
 			set id [ thread::create { 
 				proc runFlap { hFlapList w2a a2w } {
 					while { 1 } {
-                        puts "withdraw..."					
-						foreach handle $hFlapList {
+                        puts "withdraw..."
+                        foreach handle $hFlapList {
 							ixNet setA $handle -enabled False
 						}
 						ixNet commit
@@ -632,8 +631,7 @@ class RouterNgpfEmulationObject {
 	method flappingRouteForTimes { routeBlockList a2w w2a times } {
 		set tag "body RouterNgpfEmulationObject::flappingRouteAsync [info script]"
         Deputs "----- TAG: $tag -----"
-		
-		
+		debug 1
 		for { set index 0 } { $index < $times } { incr index } {
 			foreach rb $routeBlockList {
 				$rb disable
