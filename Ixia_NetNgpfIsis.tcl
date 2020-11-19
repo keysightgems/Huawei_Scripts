@@ -104,15 +104,37 @@ body IsisSession::reborn {} {
     set topoObjList [ixNet getL [ixNet getRoot] topology]
     Deputs "topoObjList: $topoObjList"
     set vportList [ixNet getL [ixNet getRoot] vport]
-    set vport [ lindex $vportList end ]
+    #set vport [ lindex $vportList end ]
     if {[llength $topoObjList] != [llength $vportList]} {
         foreach topoObj $topoObjList {
+            #set vportObj [ixNet getA $topoObj -vports]
+            #foreach vport $vportList {
+            #    if {$vportObj != $vport && $vport == $hPort} {
+            #        set ethernetObj [CreateProtoHandleFromRoot $hPort]
+            #    }
+            #}
+            #break
             set vportObj [ixNet getA $topoObj -vports]
-            foreach vport $vportList {
-                if {$vportObj != $vport && $vport == $hPort} {
-                    set ethernetObj [CreateProtoHandleFromRoot $hPort]
-                }
-            }
+			foreach vport $vportList {
+			    if {$vportObj != $vport && $vport == $hPort} {
+				    set vportTopoList ""
+				    foreach topoObj $topoObjList {
+                        set vportObj [ixNet getA $topoObj -vports]
+                        lappend vportTopoList $vportObj
+                    }
+                    if {[string first $hPort $vportTopoList] == -1} {
+
+                        set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
+                        ixNet commit
+                        set deviceGroupObj [ixNet add $topoObj deviceGroup]
+                        ixNet commit
+                        ixNet setA $deviceGroupObj -multiplier 1
+                        ixNet commit
+                        set ethernetObj [ixNet add $deviceGroupObj ethernet]
+                        ixNet commit
+                    }
+				}
+			}
             break
         }
     }
@@ -278,7 +300,9 @@ body IsisSession::config { args } {
 			}
 		}
     }
-	set isisRouter [GetDependentNgpfProtocolHandle $handle "isisL3Router"]
+    #set isisRouter [GetDependentNgpfProtocolHandle $handle "isisL3Router"]
+	set deviceGroupObj [GetDependentNgpfProtocolHandle $handle deviceGroup]
+	set isisRouter [ixNet getL $deviceGroupObj "isisL3Router"]
     set topoObjList [ixNet getL [ixNet getRoot] topology]
     foreach topoObj $topoObjList {
         set vportObj [ixNet getA $topoObj -vports]
@@ -413,8 +437,7 @@ body IsisSession::config { args } {
                 }
 				
 				if { [ info exists enable_wide_metric ] } {
-			       ixNet setA [ixNet getA $isisRouter -enableWideMetric]/singleValue -value $enable_wide_metric
-
+				    ixNet setA [ixNet getA $isisRouter -enableWideMetric]/singleValue -value $enable_wide_metric
                 }
 				
 				if { [ info exists network_type ] } {
@@ -485,8 +508,8 @@ body IsisSession::withdraw_topo {} {
     return [GetStandardReturnHeader]
 }
 
-
 class SimulatedRoute {
+    inherit EmulationNgpfObject
 	public variable deviceGroupObj
     public variable isisObj
     public variable isisHandle
@@ -588,12 +611,15 @@ body SimulatedRoute::config { args } {
                 } else {
                     set step 1
                 }
+                
                 set ipv6PoolObj ""
                 set ipv4PoolObj ""
                 if {[IsIPv6Address $start]} {
+
                     set ipv6PoolObj [ixNet getL $networkGroupObj ipv6PrefixPools]
                     if {[llength $ipv6PoolObj] == 0} {
                         set ipv6PoolObj [ixNet add $networkGroupObj "ipv6PrefixPools"]
+                        ixNet commit
                     }
                     set connector [ixNet add $ipv6PoolObj connector]
                     ixNet setA $connector -connectedTo $isisHandle
@@ -603,6 +629,7 @@ body SimulatedRoute::config { args } {
                     set ipv4PoolObj [ixNet getL $networkGroupObj "ipv4PrefixPools"]
                     if {[llength $ipv4PoolObj] == 0} {
                         set ipv4PoolObj [ixNet add $networkGroupObj "ipv4PrefixPools"]
+                        ixNet commit
                     }
                     set connector [ixNet add $ipv4PoolObj connector]
                     ixNet setA $connector -connectedTo $isisHandle
