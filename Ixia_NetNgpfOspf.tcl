@@ -449,19 +449,29 @@ Deputs "----- TAG: $tag -----"
         Deputs "topoObjList: $topoObjList"
         set vportList [ixNet getL [ixNet getRoot] vport]
         #set vport [ lindex $vportList end ]
+
         if {[llength $topoObjList] != [llength $vportList]} {
             foreach topoObj $topoObjList {
                 set vportObj [ixNet getA $topoObj -vports]
                 foreach vport $vportList {
                     if {$vportObj != $vport && $vport == $hPort} {
-                        set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
-                        set deviceGroupObj [ixNet add $topoObj deviceGroup]
-                        ixNet commit
-                        ixNet setA $deviceGroupObj -multiplier 1
-                        ixNet commit
-                        set ethernetObj [ixNet add $deviceGroupObj ethernet]
-                        set ipv4Obj [ixNet add $ethernetObj ipv4]
-                        ixNet commit
+                        set vportTopoList ""
+                        foreach topoObj $topoObjList {
+                            set vportObj [ixNet getA $topoObj -vports]
+                            lappend vportTopoList $vportObj
+                        }
+                        if {[string first $hPort $vportTopoList] == -1} {
+                            set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
+                            ixNet commit
+                            set deviceGroupObj [ixNet add $topoObj deviceGroup]
+                            ixNet commit
+                            ixNet setA $deviceGroupObj -multiplier 1
+                            ixNet commit
+                            set ethernetObj [ixNet add $deviceGroupObj ethernet]
+                            ixNet commit
+                            set ipv4Obj [ixNet add $ethernetObj ipv4]
+
+                        }
                     }
                 }
                 break
@@ -1063,19 +1073,28 @@ Deputs "----- TAG: $tag -----"
         Deputs "topoObjList: $topoObjList"
         set vportList [ixNet getL [ixNet getRoot] vport]
         #set vport [ lindex $vportList end ]
+
         if {[llength $topoObjList] != [llength $vportList]} {
             foreach topoObj $topoObjList {
                 set vportObj [ixNet getA $topoObj -vports]
                 foreach vport $vportList {
                     if {$vportObj != $vport && $vport == $hPort} {
-                        set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
-                        set deviceGroupObj [ixNet add $topoObj deviceGroup]
-                        ixNet commit
-                        ixNet setA $deviceGroupObj -multiplier 1
-                        ixNet commit
-                        set ethernetObj [ixNet add $deviceGroupObj ethernet]
-                        set ipv6Obj [ixNet add $ethernetObj ipv6]
-                        ixNet commit
+                        set vportTopoList ""
+                        foreach topoObj $topoObjList {
+                            set vportObj [ixNet getA $topoObj -vports]
+                            lappend vportTopoList $vportObj
+                        }
+                        if {[string first $hPort $vportTopoList] == -1} {
+                            set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
+                            ixNet commit
+                            set deviceGroupObj [ixNet add $topoObj deviceGroup]
+                            ixNet commit
+                            ixNet setA $deviceGroupObj -multiplier 1
+                            ixNet commit
+                            set ethernetObj [ixNet add $deviceGroupObj ethernet]
+                            ixNet commit
+                            set ipv6Obj [ixNet add $ethernetObj ipv6]
+                        }
                     }
                 }
                 break

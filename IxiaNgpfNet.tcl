@@ -20,6 +20,18 @@ proc GetEnxNgpfInfo { args } {
 
 }
 
+proc setMulticastEpsetValue {McastHandle} {
+	set retList []
+	foreach addr $McastHandle {
+		#Deputs "McastHandle $addr"
+		set mcastAddr [ixNet getA [ixNet getA $addr -startMcastAddr] -values]
+		set mcastIncr [ixNet getA [ixNet getA $addr -mcastAddrIncr] -values]
+		set mcastCount [ixNet getA [ixNet getA $addr -mcastAddrCnt] -values]
+		lappend retList [list $mcastAddr $mcastIncr $mcastCount]
+	}
+    return $retList
+}
+
 proc GetOspfNgpfRouterHandle {handle {option 0}} {
     set result [regexp {(.*)(topology:[0-9]+)/(deviceGroup:[0-9]+).*([0-9]):(.*)$} $handle match match1 match2 match3 match4]
 	set devHandle [join $match1/$match2/$match3]

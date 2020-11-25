@@ -126,6 +126,7 @@ class DhcpHost {
 				    ixNet setA $deviceGroupObj -multiplier 1
 				}
 			} else {
+				#set dhcpVersion ipv6
 				set sg_dhcpEndpoint [ixNet add $sg_ethernet dhcpv6client]
 			}
 			ixNet commit
@@ -1399,25 +1400,24 @@ body DhcpHost::unset_igmp_over_dhcp {} {
 body DhcpHost::get_port_summary_stats { view } {
     set tag "body DhcpHost::get_port_summary_stats [info script]"
 	Deputs "----- TAG: $tag -----"
-
     set captionList         	[ixNet getA $view/page -columnCaptions ]
-    set nameIndex          		[ lsearch -exact $captionList {Stat Name} ]
+    set nameIndex          		[ lsearch -exact $captionList {Port} ]
 	Deputs "index:$nameIndex"
-    set ackRcvIndex          	[ lsearch -exact $captionList {ACKs Received} ]
+    set ackRcvIndex          	[ lsearch -exact $captionList {ACKs Rx} ]
 	Deputs "index:$ackRcvIndex"
     set addDiscIndex          	[ lsearch -exact $captionList {Addresses Discovered} ]
 	Deputs "index:$addDiscIndex"
-    set declineSntIndex          	[ lsearch -exact $captionList {Declines Sent} ]
+    set declineSntIndex          	[ lsearch -exact $captionList {Declines Tx} ]
 	Deputs "index:$declineSntIndex"
-    set discSntIndex          	[ lsearch -exact $captionList {Discovers Sent} ]
+    set discSntIndex          	[ lsearch -exact $captionList {Discovers Tx} ]
 	Deputs "index:$discSntIndex"
-    set nakRcvIndex          	[ lsearch -exact $captionList {NACKs Received} ]
+    set nakRcvIndex          	[ lsearch -exact $captionList {NACKs Rx} ]
 	Deputs "index:$nakRcvIndex"
-    set offerRcvIndex          	[ lsearch -exact $captionList {Offers Received} ]
+    set offerRcvIndex          	[ lsearch -exact $captionList {Offers Rx} ]
 	Deputs "index:$offerRcvIndex"
-    set releaseSntIndex          	[ lsearch -exact $captionList {Releases Sent} ]
+    set releaseSntIndex          	[ lsearch -exact $captionList {Releases Tx} ]
 	Deputs "index:$releaseSntIndex"
-    set reqSntIndex          	[ lsearch -exact $captionList {Requests Sent} ]
+    set reqSntIndex          	[ lsearch -exact $captionList {Requests Txt} ]
 	Deputs "index:$reqSntIndex"
     set sessFailIndex          	[ lsearch -exact $captionList {Sessions Failed} ]
 	Deputs "index:$sessFailIndex"
@@ -1425,9 +1425,9 @@ body DhcpHost::get_port_summary_stats { view } {
 	Deputs "index:$sessInitIndex"
     set sessSuccIndex          	[ lsearch -exact $captionList {Sessions Succeeded} ]
 	Deputs "index:$sessSuccIndex"
-    set succRateIndex          	[ lsearch -exact $captionList {Setup Success Rate} ]
+    set succRateIndex          	[ lsearch -exact $captionList {Max Setup Rate} ]
 	Deputs "index:$succRateIndex"
-    set avgSuccRateIndex        [ lsearch -exact $captionList {Avg Setup Success Rate} ]
+    set avgSuccRateIndex        [ lsearch -exact $captionList {Average Setup Rate} ]
 	Deputs "index:$avgSuccRateIndex"
 
     set ret [ GetStandardReturnHeader ]
@@ -1678,8 +1678,9 @@ Deputs "Args:$args "
 body Dhcpv4Host::get_port_summary_stats {} {
     set tag "body Dhcpv4Host::get_port_summary_stats [info script]"
 	Deputs "----- TAG: $tag -----"
-	set view ::ixNet::OBJ-/statistics/view:\"DHCPv4\"
-	Deputs "view:$view"	
+	set view {::ixNet::OBJ-/statistics/view:"DHCPv4 Client Per Port"}
+	#set view ::ixNet::OBJ-/statistics/view:\"DHCPv4\"
+	Deputs "view:$view"
 	return [ chain $view ]
 }
 
@@ -1910,8 +1911,8 @@ Deputs "Args:$args "
 body Dhcpv6Host::get_port_summary_stats {} {
     set tag "body Dhcpv6Host::get_port_summary_stats [info script]"
 	Deputs "----- TAG: $tag -----"
-
-	set view ::ixNet::OBJ-/statistics/view:\"DHCPv6\"
+    set view {::ixNet::OBJ-/statistics/view:"DHCPv6 Client Per Port"}
+	#set view ::ixNet::OBJ-/statistics/view:\"DHCPv6\"
 
 	return [ chain $view ]
 }
@@ -3407,7 +3408,7 @@ class Ipv6AutoConfigHost {
 	        ixNet setA $sg_ipEndpoint -name $this
 	        ixNet commit
 	    } else {
-	         debug 1
+
 	         error "Failed to add ipv6Autoconfiguration"
 	    }
 	    set sg_ipEndpoint [ixNet remapIds $sg_ipEndpoint]
