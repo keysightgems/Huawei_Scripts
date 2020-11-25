@@ -375,7 +375,7 @@ class Header {
 	
     public variable noMac
     public variable noIp
-
+	
     private variable valid
     method ChangeType { chtype } { set type $chtype }
     method SetProtocol { value } { set protocol $value }
@@ -1323,42 +1323,27 @@ body Traffic::config { args  } {
                     if { [ $srcObj cget -protocol ] == "bgp" } {
                         set routeBlockHandle [ $srcObj cget -handle ]
                         set hBgp [ ixNet getP $routeBlockHandle ]
+						Deputs "routeBlockHandle:$routeBlockHandle"
                         Deputs "bgp route block:$hBgp"
-                        if { [ catch {
-                            set rangeCnt [ llength [ ixNet getL $hBgp routeRange ] ]
-                        } ] } {
-                            set rangeCnt [ llength [ ixNet getL $hBgp vpnRouteRange ] ]
-                        }
-
-                        if { $rangeCnt > 1 } {
-                            set p [ ixNet getP $routeBlockHandle ]
-                            set startIndex [ string first $p $routeBlockHandle ]
-                            set endIndex [ expr $startIndex + [ string length $p ] - 1 ]
-                            set routeBlockHandle \
-                            [ string replace $routeBlockHandle \
-                            $startIndex $endIndex $p.0 ]
-                            Deputs "route block handle:$routeBlockHandle"		
-                        } else {
-                            set routeBlockHandle [ $srcObj cget -hPort ]/protocols/bgp
-                        }
-                        set srcHandle [ concat $srcHandle $routeBlockHandle ]
+						lappend srcHandle $routeBlockHandle
                         lappend srcPortHandle [ $srcObj cget -hPort ]
 						Deputs "srcHandle:$srcHandle"
-					Deputs "srcPortHandle:$srcPortHandle"
-					} else {
+						Deputs "srcPortHandle:$srcPortHandle"
+                    } else {
                         set srcHandle [ concat $srcHandle [ $srcObj cget -handle ] ]
                         lappend srcPortHandle [ $srcObj cget -hPort ]
+						set srcHandle [getTopoHandle $srcPortHandle]
                         set trafficType [ $srcObj cget -type ]
 							Deputs "srcHandle:$srcHandle"
-					Deputs "srcPortHandle:$srcPortHandle"
-					}
+							Deputs "srcPortHandle:$srcPortHandle"
+                    }
                     set trafficType [ $srcObj cget -type ]
-
                 } elseif { [ $srcObj isa Host ] } {
                     if { [ $srcObj cget -static ] } {
                         set trafficType "ethernetVlan"
                     } else {
-						set trafficType [ $srcObj cget -ipVersion]
+						Deputs "trafficType $trafficType"
+                        set trafficType [ $srcObj cget -ipVersion]
 						
                     }
                     set srcHandle [ concat $srcHandle [ $srcObj cget -handle ] ]
@@ -1369,43 +1354,58 @@ body Traffic::config { args  } {
                 } elseif { [ $srcObj isa MulticastGroup ] } {
                     if { [ $srcObj cget -protocol ] == "mld" } {
                         set trafficType "ipv6"
-                    } 
+                    }
+                    if { [ $dstObj cget -protocol ] == "igmp" } {
+                        set trafficType "ipv4"
+                    }
                     set srcHandle [ concat $srcHandle [ $srcObj cget -handle ] ]
                     lappend srcPortHandle [ $srcObj cget -hPort ]
+					set srcHandle [getTopoHandle $srcPortHandle]
 						Deputs "srcHandle:$srcHandle"
 					Deputs "srcPortHandle:$srcPortHandle"
-
                 } elseif { [ $srcObj isa VcLsp ] } {
                     set trafficType "ethernetVlan"
                     set srcHandle [ concat $srcHandle [ $srcObj cget -handle ] ]
                     lappend srcPortHandle [ $srcObj cget -hPort ]
+					set srcHandle [getTopoHandle $srcPortHandle]
 						Deputs "srcHandle:$srcHandle"
 					Deputs "srcPortHandle:$srcPortHandle"
-
                 } elseif { [ $srcObj isa IpHost ] } {
                     set trafficType "ipv4"
                     set srcHandle [ concat $srcHandle [ $srcObj cget -handle ] ]
                     lappend srcPortHandle [ $srcObj cget -hPort ]
+					set srcHandle [getTopoHandle $srcPortHandle]
 						Deputs "srcHandle:$srcHandle"
 					Deputs "srcPortHandle:$srcPortHandle"
-
                 } elseif { [$srcObj isa DeviceGroup] } {
                 	if { $trafficType == "ipv4" } {
                 		if { [$srcObj cget -type] == "IPV4" } {
                 			set srcHandle [ concat $srcHandle [ $srcObj cget -handle ]]
+							lappend srcPortHandle [ $srcObj cget -hPort ]
+							set srcHandle [getTopoHandle $srcPortHandle]
+							
 								Deputs "srcHandle:$srcHandle"
-
+							
                 		} else {
                 			set srcHandle [ concat $srcHandle [ $srcObj cget -bgpIpv4NetworkGroup ]]
+							lappend srcPortHandle [ $srcObj cget -hPort ]
+							set srcHandle [getTopoHandle $srcPortHandle]
 							Deputs "srcHandle:$srcHandle"
+							
                 		}
                 	} elseif { $trafficType == "ipv6" } {
                 	if { [$srcObj cget -type] == "IPV6" } {
                 			set srcHandle [ concat $srcHandle [ $srcObj cget -handle ]]
+							lappend srcPortHandle [ $srcObj cget -hPort ]
+							set srcHandle [getTopoHandle $srcPortHandle]
 							Deputs "srcHandle:$srcHandle"
+								
                 		} else {
 											set srcHandle [ concat $srcHandle [ $srcObj cget -bgpIpv6NetworkGroup ]]
+											lappend srcPortHandle [ $srcObj cget -hPort ]
+											set srcHandle [getTopoHandle $srcPortHandle]
 											Deputs "srcHandle:$srcHandle"
+								
 										}
                 	}
               		foreach p [$srcObj cget -portObj] {
@@ -1415,6 +1415,7 @@ body Traffic::config { args  } {
                     Deputs Step120
                     set srcHandle [ concat $srcHandle [ $srcObj cget -handle ] ]
                     lappend srcPortHandle [ $srcObj cget -hPort ]
+					set srcHandle [getTopoHandle $srcPortHandle]
 					Deputs "srcHandle:$srcHandle"
 					Deputs "srcPortHandle:$srcPortHandle"
                 }
@@ -1444,43 +1445,27 @@ body Traffic::config { args  } {
 					set dstHandle [getTopoHandle $dstPortHandle]
 					Deputs "dstHandle:$dstHandle"
                 } elseif { [ $dstObj isa RouteBlock ] } {
+                    puts "Suji"
                     if { [ $dstObj cget -protocol ] == "bgp" } {
                         set routeBlockHandle [ $dstObj cget -handle ]
                         set hBgp [ ixNet getP $routeBlockHandle ]
-                        Deputs "bgp route block:$hBgp"
-                        if { [ catch {
-                            set rangeCnt [ llength [ ixNet getL $hBgp routeRange ] ]
-                        } ] } {
-                            set rangeCnt [ llength [ ixNet getL $hBgp vpnRouteRange ] ]
-                        }
-                        if { $rangeCnt > 1 } {
-                            set p [ ixNet getP $routeBlockHandle ]
-                            set startIndex [ string first $p $routeBlockHandle ]
-                            set endIndex [ expr $startIndex + [ string length $p ] - 1 ]
-                            set routeBlockHandle \
-                            [ string replace $routeBlockHandle \
-                            $startIndex $endIndex $p.0 ]
-                            Deputs "route block handle:$routeBlockHandle"		
-                        } else {
-                            set routeBlockHandle [ $dstObj cget -hPort ]/protocols/bgp
-                            
-                        }
-                        Deputs "dstHandle:111 $dstHandle"
-                        set dstHandle [ concat $dstHandle $routeBlockHandle ]
-                        Deputs "dstHandle:222 $dstHandle"
+                        lappend dstHandle $routeBlockHandle
                         lappend dstPortHandle [ $dstObj cget -hPort ]
+						Deputs "dstHandle:$dstHandle"
                         set trafficType [ $dstObj cget -type ]
                     } else {
                         Deputs "dst obj:$dstObj"				
                         Deputs "route block handle:[$dstObj cget -handle]"				
                         set dstHandle [ concat $dstHandle [ $dstObj cget -handle ] ]
                         lappend dstPortHandle [ $dstObj cget -hPort ]
+						set dstHandle [getTopoHandle $dstPortHandle]
                         set trafficType [ $dstObj cget -type ]
                     }
                 } elseif { [ $dstObj isa Host ] } {
                     set dstHandle [ concat $dstHandle [ $dstObj cget -handle ] ]
                     lappend dstPortHandle [ $dstObj cget -hPort ]
-                    if { [ $dstObj cget -static ] } {
+					set dstHandle [getTopoHandle $dstPortHandle]
+					if { [ $dstObj cget -static ] } {
                         set trafficType "ethernetVlan"
                     } else {
                         set trafficType [ $dstObj cget -ip_version ]
@@ -1488,25 +1473,43 @@ body Traffic::config { args  } {
                 } elseif { [ $dstObj isa MulticastGroup ] } {
                     if { [ $dstObj cget -protocol ] == "mld" } {
                         set trafficType "ipv6"
-                    }                 
+                    }
+                    if { [ $dstObj cget -protocol ] == "igmp" } {
+                        set trafficType "ipv4"
+                    }
                     set dstHandle [ concat $dstHandle [ $dstObj cget -handle ] ]
                     lappend dstPortHandle [ $dstObj cget -hPort ]
+					Deputs "dstHandle:$dstHandle"
+					Deputs "dstPortHandle:$dstPortHandle"
+					set mcastValue [setMulticastEpsetValue $dstHandle]
+					Deputs "dstHandle:$dstHandle"
+					
+					
                 } elseif { [ $dstObj isa IpHost ] } {
                     set trafficType "ipv4"
                     set dstHandle [ concat $dstHandle [ $dstObj cget -handle ] ]
                     lappend dstPortHandle [ $dstObj cget -hPort ]
+						set dstHandle [getTopoHandle $dstPortHandle]
                 } elseif { [$dstObj isa DeviceGroup] } {
                 	if { $trafficType == "ipv4" } {
                 		if { [$srcObj cget -type] == "IPV4" } {
                 			set dstHandle [ concat $dstHandle [ $dstObj cget -handle ]]
+							lappend dstPortHandle [ $dstObj cget -hPort ]
+							set dstHandle [getTopoHandle $dstPortHandle]
                 		} else {                	
-                			set dstHandle [ concat $dstHandle [ $dstObj cget -bgpIpv4NetworkGroup ]]  
+                			set dstHandle [ concat $dstHandle [ $dstObj cget -bgpIpv4NetworkGroup ]] 
+							lappend dstPortHandle [ $dstObj cget -hPort ]
+							set dstHandle [getTopoHandle $dstPortHandle]
                 		}              		
                 	} elseif { $trafficType == "ipv6" } {
                 		if { [$srcObj cget -type] == "IPV6" } {
                 			set dstHandle [ concat $dstHandle [ $dstObj cget -handle ]]
+							lappend dstPortHandle [ $dstObj cget -hPort ]
+							set dstHandle [getTopoHandle $dstPortHandle]
                 		} else {                   	
 											set dstHandle [ concat $dstHandle [ $dstObj cget -bgpIpv6NetworkGroup ]]
+											lappend dstPortHandle [ $dstObj cget -hPort ]
+											set dstHandle [getTopoHandle $dstPortHandle]
 										}
                 	}
               		foreach p [$dstObj cget -portObj] {
@@ -1515,6 +1518,7 @@ body Traffic::config { args  } {
                 } else {
                     set dstHandle [ concat $dstHandle [ $dstObj cget -handle ] ]
                     lappend dstPortHandle [ $dstObj cget -hPort ]
+						set dstHandle [getTopoHandle $dstPortHandle]
                 }
             }
              Deputs "dst handle:$dstHandle"
@@ -1579,8 +1583,7 @@ body Traffic::config { args  } {
                 ixNet commit
             }
             ixNet commit
-
-			if {[info exists enable_mixed_speed] && [regexp -nocase "true" $enable_mixed_speed]} {
+            if {[info exists enable_mixed_speed] && [regexp -nocase "true" $enable_mixed_speed]} {
 				Deputs "add endpointSet without distinguishing speed ..."
 				set endpointSet [ixNet add $handle endpointSet]
 				Deputs "src:$srcHandle"
@@ -1658,12 +1661,35 @@ body Traffic::config { args  } {
 						#-- add endpointSet
 						Deputs "add endpointSet..."
 						set endpointSet [ixNet add $handle endpointSet]
+						ixNet commit
+						set endpointSet [ ixNet remapIds $endpointSet ]
 						Deputs "src:$srcHandle"
-
+						
+						if { [ $dstObj isa MulticastGroup ] } {
+							set mcastl [list]
+							set mrevl [list]
+							for {set i 0} {$i < [llength $dstHandle]} {incr i} {
+								if {$i == 0} {
+								lappend mrevl [list [lindex $dstHandle $i] 0 0 0]
+								}
+								if {$i == 1} {
+								lappend mrevl [list [lindex $dstHandle $i] 0 1 0]
+								}
+								if {$i == 2} {
+								lappend mrevl [list [lindex $dstHandle $i] 0 0 1]
+								}
+							}
+							for {set i 0} {$i < [llength $mcastValue]} {incr i} {
+								lappend mcastl [list false none [lindex $mcastValue $i]]
+							}
+							ixNet setA $endpointSet -sources $srcHandle -multicastDestinations $mcastl -multicastReceivers $mrevl
+							ixNet commit
+						} else {
 						ixNet setA $endpointSet -sources $srcHandle -destinations $dstHandle
+						ixNet commit
+						}
+					
 						
-						
-						Deputs "dst:$dstHandle"
 						#ixNet setA $endpointSet -destinations $dstHandle
 						ixNet commit
 						
@@ -1673,7 +1699,7 @@ body Traffic::config { args  } {
 						set endpointSet [ ixNet remapIds $endpointSet ]
 						Deputs "ep:$endpointSet"
 						Deputs Step190
-
+						 
 					} err]} {
 						error "Source or destination speed doesn't match each other!!!"
 					}
@@ -1798,6 +1824,7 @@ body Traffic::config { args  } {
                             Deputs "stack to be added: $proStack"
                             ixNet exec append $appendHeader $proStack
                             set stack [lindex [ ixNet getList $hStream stack ] $stackLevel]
+                            Deputs "stack:$stack"
                             incr stackLevel
                             Deputs "stackLevel:$stackLevel"
                             #set stack ${hStream}/stack:\"[ string tolower $protocol ]-${stackLevel}\"
@@ -1820,6 +1847,7 @@ body Traffic::config { args  } {
                                 Deputs "stack to be added: $proStack"
                                 ixNet exec append $appendHeader $proStack
                                 set stack [lindex [ ixNet getList $hStream stack ] $stackLevel]
+                                Deputs "stack:$stack"
                                 lappend  listStack $stack
     
                                 incr stackLevel
@@ -1851,6 +1879,7 @@ body Traffic::config { args  } {
                     catch {
                         set stack [ ixNet remapIds $stack ]
                     }
+                    Deputs "Stack:$stack"
                     set appendHeader $stack
                     Deputs "Stack list:[ ixNet getList $hStream stack ]"
     
@@ -1918,10 +1947,11 @@ body Traffic::config { args  } {
                             foreach mode $fieldModes field $fields conf $fieldConfigs\
                             opt $optional auto $autos mesh $meshes enable $enables {
                                 Deputs "mode $fieldModes field $fields conf $fieldConfigs opt $optional auto $autos enable:$enable"
-
+                                # Deputs "stack:$stack"
+                                # Deputs "field:$field"
                                 set obj [ GetField $stack $field ]
                                 Deputs "Field object: $obj"
-
+                                # Deputs "optional $opt"
                                 if { [ info exists opt ] } {
                                     if { $opt == "" } { continue }
                                     if { $opt } {
@@ -2039,7 +2069,9 @@ body Traffic::config { args  } {
                             if { $field == "" } {
                                 continue
                             }
-
+                            Deputs "stack:$stack"
+                            Deputs "field:$field"
+                            Deputs "mesh:$mesh"
                             set obj [ GetField $stack $field ]
                             Deputs "Field object: $obj"
             
@@ -2159,12 +2191,6 @@ body Traffic::config { args  } {
                         Deputs "@@@@@@@@@@5Stack Link list:$listStackLink"
                         
                         # Handle stackLink options
-                        if {[ info exists linkToType ]} {
-                            #set linkToType $linkToType
-                            set linkToType [ $name cget -linkToType ]
-                        } else {
-                            set linkToType  null
-                        }
                         if { [ $name isa VlanHdr ] } {
                             SetStackLink $listStackLink "vlan" $linkToType
                         } elseif { [ $name isa MplsHdr ] } {
@@ -2354,7 +2380,8 @@ body Traffic::config { args  } {
                             }
                             set stack $pro
 
-                            set needMod 1
+                            set needMod 1                                       
+                            Deputs "Stack:$stack"
                         }
                     }
                    
@@ -2380,8 +2407,11 @@ body Traffic::config { args  } {
                             foreach mode $fieldModes field $fields conf $fieldConfigs\
                             opt $optional auto $autos mesh $meshes enable $enables {
                                 Deputs "mode $fieldModes field $fields conf $fieldConfigs opt $optional auto $autos"
+                                # Deputs "stack:$stack"
+                                # Deputs "field:$field"
                                 set obj [ GetField $stack $field ]
-
+                                Deputs "Field object: $obj"
+                                # Deputs "optional $opt"
                                 if { [ info exists opt ] } {
                                     if { $opt == "" } { continue }
                                     if { $opt } {
@@ -2498,7 +2528,9 @@ body Traffic::config { args  } {
                             if { $field == "" } {
                                 continue
                             }
-
+                            Deputs "stack:$stack"
+                            Deputs "field:$field"
+                            Deputs "mesh:$mesh"
                             set obj [ GetField $stack $field ]
                             Deputs "Field object: $obj"
             
@@ -2677,7 +2709,9 @@ body Traffic::config { args  } {
                     set stack $pro
 
                     set needMod 1                                       
-
+                    Deputs "Stack:$stack"
+                   
+                    
                     set fieldModes [ $name cget -fieldModes ]
                     set fields [ $name cget -fields ]
                     set fieldConfigs [ $name cget -fieldConfigs ]
@@ -2691,7 +2725,9 @@ body Traffic::config { args  } {
                         if { $field == "" } {
                             continue
                         }
-
+                        Deputs "stack:$stack"
+                        Deputs "field:$field"
+                        Deputs "mesh:$mesh"
                         set obj [ GetField $stack $field ]
                         Deputs "Field object: $obj"
         
@@ -3248,7 +3284,8 @@ body Traffic::config { args  } {
     
     foreach hs $highLevelStream {
         foreach stack [ ixNet getList $hs stack ] {
-			if { [ regexp ipv4 $stack ] } {
+			Deputs "stack: $stack"
+            if { [ regexp ipv4 $stack ] } {
                 foreach filed [ ixNet getList $stack field ] {
                     if { [ regexp precedence $filed ] } {
                         if { [ info exists precedence ] } {
@@ -3600,10 +3637,13 @@ Deputs StepDone
 body Traffic::GetField { stack value } {
     set tag "body Traffic::GetField [info script]"
     Deputs "----- TAG: $tag -----"
+    Deputs "stack: $stack, value:$value"
     set fieldList [ixNet getList $stack field]
+    #Deputs "fieldList:$fieldList"
     set index 0
     foreach field $fieldList {
 		if {[regexp -nocase "ipv6SID-" $value] && [ regexp -nocase "${value}" $field ]} {
+			#Deputs "value: $value, stack: $stack, field: $field"
 			# for ipv6RoutingType4.segmentRoutingHeader.segmentList.ipv6SID-13 (from -13 to - 32)
 			break
 		} else {
@@ -3636,9 +3676,10 @@ body Traffic::SetStackLink { stackLinkList header value } {
         if { [ regexp -nocase "${header}-" $stackLink ] } {
             if { $innerStack == "" } {
                 set innerStack $stackLink
-
+                Deputs "@@@@@@@@@@3innerStack:$stackLink"
             } elseif { $outStack == "" } {
                 set outStack $stackLink
+                Deputs "@@@@@@@@@@4outStack:$stackLink"
             } 
         }
     }
@@ -3703,12 +3744,6 @@ body Traffic::get_stats { args } {
 			set view [CreatePerDrillDownView vlanPriority $targetRowFilter]
 		} elseif {[regexp -nocase "mplsExp" $drill_down_type]}  {
 			set view [CreatePerDrillDownView mplsExp $targetRowFilter]
-		} elseif {[regexp -nocase "Drill down per Source/Dest Port Pair" $drill_down_type]}  {
-			set view [CreatePerDrillDownView "Drill down per Source/Dest Port Pair" $targetRowFilter]
-		} elseif {[regexp -nocase "Show All Filtered Flows" $drill_down_type]}  {
-			set view [CreatePerDrillDownView "Show All Filtered Flows" $targetRowFilter]
-		} elseif {[regexp -nocase "Drill Down per Rx Port" $drill_down_type]}  {
-			set view [CreatePerDrillDownView "Drill Down per Rx Port" $targetRowFilter]
 		}
 	} else {
 		if { $tracking != "none" } {
@@ -4525,14 +4560,7 @@ body Traffic::CreatePerDrillDownView { drillDownType targetRow } {
 		set targetDrillDownOption {Drill down per VLAN:VLAN Priority}
 	} elseif {[regexp -nocase "mplsExp" $drillDownType]} {
 		set targetDrillDownOption {Drill down per MPLS:MPLS Exp}
-	} elseif {[regexp -nocase "Drill down per Source/Dest Port Pair" $drillDownType]} {
-		set targetDrillDownOption {Drill down per Source/Dest Port Pair}
-	} elseif {[regexp -nocase "Show All Filtered Flows" $drillDownType]} {
-		set targetDrillDownOption {Show All Filtered Flows}
-	} elseif {[regexp -nocase "Drill Down per Rx Port" $drillDownType]} {
-		set targetDrillDownOption {Drill Down per Rx Port}
-	}
-
+	} 
 	ixNet setA {::ixNet::OBJ-/statistics/view:"Traffic Item Statistics"/drillDown} -targetDrillDownOption $targetDrillDownOption
 	ixNet commit
 	
@@ -5181,7 +5209,6 @@ body SingleVlanHdr::config { args } {
 		  -id1 -
 		  -id {
 			 set trans [ UnitTrans $value ]
-
 			 if { [ string is integer $trans ] } {
 				set vlanId $trans
 			 } else {
@@ -5252,8 +5279,7 @@ body SingleVlanHdr::config { args } {
 	   error "$errNumber(3) key:protocol value:$pro"
     }
     SetProtocol Vlan
-    Deputs "Sujith"
-    debug 1
+
     #-----Config Vlan ID ------
     if { [ info exists vlanId ] } {
 	   if { [ info exists vlanMode ] } {
@@ -5406,8 +5432,6 @@ body VlanHdr::config { args } {
 
     
     set vlanObjId1       [clock click]
-    Deputs "Mohan"
-    debug 1
     if { $id1_num > 0 } {
 
 	    SingleVlanHdr vlan$vlanObjId1
