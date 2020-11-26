@@ -107,15 +107,18 @@ class SimRoute {
 	method advertise_route { } {
 	    set tag "body SimRoute::advertise_route [info script]"
         Deputs "----- TAG: $tag -----"
-
-        ixNet setA [ixNet getA $networkGroupObj -enabled]/singleValue -value True
-	    ixNet commit
+        set ipPattern [ixNet getA [ixNet getA $networkGroupObj -enabled] -pattern]
+		SetMultiValues $networkGroupObj "-enabled" $ipPattern True
+        #ixNet setA [ixNet getA $networkGroupObj -enabled]/singleValue -value True
+	    #ixNet commit
 	}
 	method withdraw_route { } {
 	    set tag "body SimRoute::withdraw_route [info script]"
         Deputs "----- TAG: $tag -----"
-        ixNet setA [ixNet getA $networkGroupObj -enabled]/singleValue -value False
-		ixNet commit
+        set ipPattern [ixNet getA [ixNet getA $networkGroupObj -enabled] -pattern]
+		SetMultiValues $networkGroupObj "-enabled" $ipPattern False
+        #ixNet setA [ixNet getA $networkGroupObj -enabled]/singleValue -value False
+		#ixNet commit
 	}
 	method flapping_route { args } {
 		set tag "body SimRoute::flapping_route [info script]"
@@ -134,20 +137,32 @@ class SimRoute {
 			}
 		}
         if {$bgpSimRouteObj != ""} {
-            ixNet setA [ixNet getA $bgpSimRouteObj -enableFlapping]/singleValue -value True
+            set ipPattern [ixNet getA [ixNet getA $bgpSimRouteObj -enableFlapping] -pattern]
+		    SetMultiValues $bgpSimRouteObj "-enableFlapping" $ipPattern True
+            #ixNet setA [ixNet getA $bgpSimRouteObj -enableFlapping]/singleValue -value True
         }
         if {$bgpV6SimRouteObj != ""} {
-            ixNet setA [ixNet getA $bgpV6SimRouteObj -enableFlapping]/singleValue -value True
+            set ipPattern [ixNet getA [ixNet getA $bgpV6SimRouteObj -enableFlapping] -pattern]
+		    SetMultiValues $bgpV6SimRouteObj "-enableFlapping" $ipPattern True
+            #ixNet setA [ixNet getA $bgpV6SimRouteObj -enableFlapping]/singleValue -value True
         }
 
         if {[info exists interval]} {
             if {$bgpSimRouteObj != ""} {
-                ixNet setA [ixNet getA $bgpSimRouteObj -downtime]/singleValue -value $interval
-                ixNet setA [ixNet getA $bgpSimRouteObj -uptime]/singleValue -value $interval
+                set ipPattern [ixNet getA [ixNet getA $bgpSimRouteObj -downtime] -pattern]
+		        SetMultiValues $bgpSimRouteObj "-downtime" $ipPattern $interval
+		        set ipPattern [ixNet getA [ixNet getA $bgpSimRouteObj -uptime] -pattern]
+		        SetMultiValues $bgpSimRouteObj "-uptime" $ipPattern $interval
+                #ixNet setA [ixNet getA $bgpSimRouteObj -downtime]/singleValue -value $interval
+                #ixNet setA [ixNet getA $bgpSimRouteObj -uptime]/singleValue -value $interval
             }
             if {$bgpV6SimRouteObj != ""} {
-                ixNet setA [ixNet getA $bgpV6SimRouteObj -downtime]/singleValue -value $interval
-                ixNet setA [ixNet getA $bgpV6SimRouteObj -uptime]/singleValue -value $interval
+                set ipPattern [ixNet getA [ixNet getA $bgpV6SimRouteObj -downtime] -pattern]
+		        SetMultiValues $bgpV6SimRouteObj "-downtime" $ipPattern $interval
+		        set ipPattern [ixNet getA [ixNet getA $bgpV6SimRouteObj -uptime] -pattern]
+		        SetMultiValues $bgpV6SimRouteObj "-uptime" $ipPattern $interval
+                #ixNet setA [ixNet getA $bgpV6SimRouteObj -downtime]/singleValue -value $interval
+                #ixNet setA [ixNet getA $bgpV6SimRouteObj -uptime]/singleValue -value $interval
             }
         }
 	    ixNet commit
@@ -229,8 +244,10 @@ body BgpSession::reborn { {version ipv4}  } {
             ixNet commit
             set bgpObj [ixNet add $ipv6Obj bgpIpv6Peer]
             ixNet commit
-            ixNet setA [ixNet getA $bgpObj -dutIp]/singleValue -value "0:0:0:0:0:0:0:0"
-            ixNet commit
+            set ipPattern [ixNet getA [ixNet getA $bgpObj -dutIp] -pattern]
+			SetMultiValues $bgpObj "-dutIp" $ipPattern "0:0:0:0:0:0:0:0"
+            #ixNet setA [ixNet getA $bgpObj -dutIp]/singleValue -value "0:0:0:0:0:0:0:0"
+            #ixNet commit
         }
         set bgpObj [ ixNet remapIds $bgpObj ]
         ixNet setA $bgpObj -name $this
@@ -248,7 +265,9 @@ body BgpSession::reborn { {version ipv4}  } {
                         set ipv4Obj [ixNet getL $ethernetObj ipv4]
                         if { $ip_version == "ipv4" } {
                             if {[ info exists ipv4_addr ]} {
-                                set ipaddr [ixNet getA [ixNet getA $ipv4Obj -address]/singleValue -value]
+                                set ipPattern [ixNet getA [ixNet getA $ipv4Obj -address] -pattern]
+                                set ipaddr [GetMultiValues $ipv4Obj "-address" $ipPattern]
+                                #set ipaddr [ixNet getA [ixNet getA $ipv4Obj -address]/singleValue -value]
                                 if {$ipaddr == $ipv4_addr} {
                                     set ethernetObj $ethernetObj
                                     set bgpObj [ixNet getL $ipv4Obj bgpIpv4Peer]
@@ -314,7 +333,9 @@ body BgpSession::reborn { {version ipv4}  } {
                      -capabilityIpV4Mpls -capabilityIpV4MplsVpn -capabilityIpV4Multicast -capabilityIpV4Unicast -capabilityIpV6Mpls -capabilityIpV6MplsVpn -capabilityIpV6Multicast \
                      -capabilityIpV6Unicast }
         foreach filter $filterList {
-            ixNet setAttr [ixNet getAttr $bgp $filter]/singleValue -value True
+            set ipPattern [ixNet getA [ixNet getA $bgp $filter] -pattern]
+			SetMultiValues $bgp $filter $ipPattern True
+            #ixNet setAttr [ixNet getAttr $bgp $filter]/singleValue -value True
         }
         ixNet commit
     }
@@ -428,7 +449,9 @@ body BgpSession::config { args } {
                     if { $ip_version == "ipv4" } {
                         Deputs "ipv4: [ixNet getL $ethernetObj ipv4]"
                         set ipv4Obj [ixNet getL $ethernetObj ipv4]
-                        ixNet setA [ixNet getA $ipv4Obj -address]/singleValue -value $ipv4_addr
+                        set ipPattern [ixNet getA [ixNet getA $ipv4Obj -address] -pattern]
+			            SetMultiValues $ipv4Obj "-address" $ipPattern $ipv4_addr
+                        #ixNet setA [ixNet getA $ipv4Obj -address]/singleValue -value $ipv4_addr
                         ixNet commit
                     }
                 }
@@ -452,32 +475,42 @@ body BgpSession::config { args } {
                     }
 
                     if { [llength $ipv6Obj] != 0 } {
-                        ixNet setA [ixNet getA $ipv6Obj -address]/singleValue -value $ipv6_addr
-                        ixNet commit
+                        set ipPattern [ixNet getA [ixNet getA $ipv6Obj -address] -pattern]
+			            SetMultiValues $ipv6Obj "-address" $ipPattern $ipv6_addr
+                        #ixNet setA [ixNet getA $ipv6Obj -address]/singleValue -value $ipv6_addr
+                        #ixNet commit
                     } else {
                         set ipv6Obj [ixNet add $ethernetObj ipv6]
                         ixNet commit
-                        ixNet setA [ixNet getA $ipv6Obj -address]/singleValue -value $ipv6_addr
-                        ixNet commit
+                        set ipPattern [ixNet getA [ixNet getA $ipv6Obj -address] -pattern]
+			            SetMultiValues $ipv6Obj "-address" $ipPattern $ipv6_addr
+                        #ixNet setA [ixNet getA $ipv6Obj -address]/singleValue -value $ipv6_addr
+                        #ixNet commit
                     }
                 }
                 if { [ info exists ipv4_gw ] } {
                     if { $ip_version == "ipv4" } {
                         set ipv4Obj [ixNet getL $ethernetObj ipv4]
-                        ixNet setA [ixNet getA $ipv4Obj -gatewayIp]/singleValue  -value $ipv4_gw
-                        ixNet commit
+                        set ipPattern [ixNet getA [ixNet getA $ipv4Obj -gatewayIp] -pattern]
+			            SetMultiValues $ipv4Obj "-gatewayIp" $ipPattern $ipv4_gw
+                        #ixNet setA [ixNet getA $ipv4Obj -gatewayIp]/singleValue  -value $ipv4_gw
+                        #ixNet commit
                     }
                 }
                 if { [ info exists gateway ] } {
                     if { $ip_version == "ipv6" } {
                         set ipv6Obj [ixNet getL $ethernetObj ipv6]
-                        ixNet setA [ixNet getA $ipv6Obj -gatewayIp]/singleValue -value $gateway
-                        ixNet commit
+                        set ipPattern [ixNet getA [ixNet getA $ipv6Obj -gatewayIp] -pattern]
+			            SetMultiValues $ipv6Obj "-gatewayIp" $ipPattern $gateway
+                        #ixNet setA [ixNet getA $ipv6Obj -gatewayIp]/singleValue -value $gateway
+                        #ixNet commit
                     }
                 }
                 if { [ info exists mac ] } {
-                    ixNet setA [ixNet getA $ethernetObj -mac]/singleValue -value $mac
-                    ixNet commit
+                    set ipPattern [ixNet getA [ixNet getA $ethernetObj -mac] -pattern]
+			        SetMultiValues $ethernetObj "-mac" $ipPattern $mac
+                    #ixNet setA [ixNet getA $ethernetObj -mac]/singleValue -value $mac
+                    #ixNet commit
                 }
                 if { [ info exists loopback_ipv4_addr ] } {
                     Deputs "not implemented parameter: loopback_ipv4_addr"
@@ -543,10 +576,14 @@ body BgpSession::config { args } {
                 }
                 if { [ info exists type ] } {
                     if {$bgpObj != ""} {
-                        ixNet setA [ixNet getA $bgpObj -type]/singleValue -value $type
+                        set ipPattern [ixNet getA [ixNet getA $bgpObj -type] -pattern]
+			            SetMultiValues $bgpObj "-type" $ipPattern $type
+                        #ixNet setA [ixNet getA $bgpObj -type]/singleValue -value $type
                     }
                     if {$bgpV6Obj != ""} {
-                        ixNet setA [ixNet getA $bgpV6Obj -type]/singleValue -value $type
+                        set ipPattern [ixNet getA [ixNet getA $bgpV6Obj -type] -pattern]
+			            SetMultiValues $bgpV6Obj "-type" $ipPattern $type
+                        #ixNet setA [ixNet getA $bgpV6Obj -type]/singleValue -value $type
                     }
                 }
                 if { [ info exists afi ] } {
@@ -557,23 +594,31 @@ body BgpSession::config { args } {
                 }
                 if { [ info exists as ] } {
                     if {$bgpObj != ""} {
-                        ixNet setA [ixNet getA $bgpObj -localAs2Bytes]/singleValue -value $as
-                        ixNet commit
+                        set ipPattern [ixNet getA [ixNet getA $bgpObj -localAs2Bytes] -pattern]
+			            SetMultiValues $bgpObj "-localAs2Bytes" $ipPattern $as
+                        #ixNet setA [ixNet getA $bgpObj -localAs2Bytes]/singleValue -value $as
+                        #ixNet commit
                     }
                     if {$bgpV6Obj != ""} {
-                        ixNet setA [ixNet getA $bgpV6Obj -localAs2Bytes]/singleValue -value $as
-                        ixNet commit
+                        set ipPattern [ixNet getA [ixNet getA $bgpV6Obj -localAs2Bytes] -pattern]
+			            SetMultiValues $bgpV6Obj "-localAs2Bytes" $ipPattern $as
+                        #ixNet setA [ixNet getA $bgpV6Obj -localAs2Bytes]/singleValue -value $as
+                        #ixNet commit
                     }
                 }
                 if { [ info exists dut_ip ] } {
                     Deputs "dut_ip:$dut_ip"
                     if {$bgpObj != ""} {
-                        ixNet setA [ixNet getA $bgpObj -dutIp]/singleValue -value $dut_ip
-                        ixNet commit
+                        set ipPattern [ixNet getA [ixNet getA $bgpObj -dutIp] -pattern]
+			            SetMultiValues $bgpObj "-dutIp" $ipPattern $dut_ip
+                        #ixNet setA [ixNet getA $bgpObj -dutIp]/singleValue -value $dut_ip
+                        #ixNet commit
                     }
                     if {$bgpV6Obj != ""} {
-                        ixNet setA [ixNet getA $bgpV6Obj -dutIp]/singleValue -value $dut_ip
-                        ixNet commit
+                        set ipPattern [ixNet getA [ixNet getA $bgpV6Obj -dutIp] -pattern]
+			            SetMultiValues $bgpV6Obj "-dutIp" $ipPattern $dut_ip
+                        #ixNet setA [ixNet getA $bgpV6Obj -dutIp]/singleValue -value $dut_ip
+                        #ixNet commit
                     }
                 }
                 if { [ info exists dut_as ] } {
@@ -593,46 +638,66 @@ body BgpSession::config { args } {
                 }
                 if { [ info exists bgp_id ] } {
                     set routeDataObj [ixNet getL $deviceGroupObj routerData]
-                    ixNet setA [ixNet getA $routeDataObj -routerId]/singleValue -value $bgp_id
+                    set ipPattern [ixNet getA [ixNet getA $routeDataObj -routerId] -pattern]
+			        SetMultiValues $routeDataObj "-routerId" $ipPattern $bgp_id
+                    #ixNet setA [ixNet getA $routeDataObj -routerId]/singleValue -value $bgp_id
                     if {$bgpObj != ""} {
-                        ixNet setA [ixNet getA $bgpObj -bgpId]/singleValue -value $bgp_id
-                        ixNet commit
+                        set ipPattern [ixNet getA [ixNet getA $bgpObj -bgpId] -pattern]
+			            SetMultiValues $bgpObj "-bgpId" $ipPattern $bgp_id
+                        #ixNet setA [ixNet getA $bgpObj -bgpId]/singleValue -value $bgp_id
+                        #ixNet commit
                     }
                     if {$bgpV6Obj != ""} {
-                        ixNet setA [ixNet getA $bgpV6Obj -bgpId]/singleValue -value $bgp_id
-                        ixNet commit
+                        set ipPattern [ixNet getA [ixNet getA $bgpV6Obj -bgpId] -pattern]
+			            SetMultiValues $bgpV6Obj "-bgpId" $ipPattern $bgp_id
+                        #ixNet setA [ixNet getA $bgpV6Obj -bgpId]/singleValue -value $bgp_id
+                        #ixNet commit
                     }
                 }
                 if { [ info exists ipv6_addr ] } {
                     set ipv6Obj [ixNet getL $ethernetObj ipv6]
-                    ixNet setA [ixNet getA $ipv6Obj -address]/singleValue -value $ipv6_addr
-                    ixNet commit
+                    set ipPattern [ixNet getA [ixNet getA $ipv6Obj -address] -pattern]
+			        SetMultiValues $ipv6Obj "-address" $ipPattern $ipv6_addr
+                    #ixNet setA [ixNet getA $ipv6Obj -address]/singleValue -value $ipv6_addr
+                    #ixNet commit
                 }
 
                 if { [ info exists enable_flap ] } {
                     if {$bgpObj != ""} {
-                        ixNet setA [ixNet getA $bgpObj -flap]/singleValue -value $enable_flap
+                        set ipPattern [ixNet getA [ixNet getA $bgpObj -flap] -pattern]
+			            SetMultiValues $bgpObj "-flap" $ipPattern $enable_flap
+                        #ixNet setA [ixNet getA $bgpObj -flap]/singleValue -value $enable_flap
                     }
                     if {$bgpV6Obj != ""} {
-                        ixNet setA [ixNet getA $bgpV6Obj -flap]/singleValue -value $enable_flap
+                        set ipPattern [ixNet getA [ixNet getA $bgpV6Obj -flap] -pattern]
+			            SetMultiValues $bgpV6Obj "-flap" $ipPattern $enable_flap
+                        #ixNet setA [ixNet getA $bgpV6Obj -flap]/singleValue -value $enable_flap
                     }
                 }
 
                 if { [ info exists flap_down_time ] } {
                     if {$bgpObj != ""} {
-                        ixNet setA [ixNet getA $bgpObj -downtimeInSec]/singleValue -value $flap_down_time
+                        set ipPattern [ixNet getA [ixNet getA $bgpObj -downtimeInSec] -pattern]
+			            SetMultiValues $bgpObj "-downtimeInSec" $ipPattern $flap_down_time
+                        #ixNet setA [ixNet getA $bgpObj -downtimeInSec]/singleValue -value $flap_down_time
                     }
                     if {$bgpV6Obj != ""} {
-                        ixNet setA [ixNet getA $bgpV6Obj -downtimeInSec]/singleValue -value $flap_down_time
+                        set ipPattern [ixNet getA [ixNet getA $bgpV6Obj -downtimeInSec] -pattern]
+			            SetMultiValues $bgpV6Obj "-downtimeInSec" $ipPattern $flap_down_time
+                        #ixNet setA [ixNet getA $bgpV6Obj -downtimeInSec]/singleValue -value $flap_down_time
                     }
                 }
 
                 if { [ info exists flap_up_time ] } {
                     if {$bgpObj != ""} {
-                        ixNet setA [ixNet getA $bgpObj -uptimeInSec]/singleValue -value $flap_up_time
+                        set ipPattern [ixNet getA [ixNet getA $bgpObj -uptimeInSec] -pattern]
+			            SetMultiValues $bgpObj "-uptimeInSec" $ipPattern $flap_up_time
+                        #ixNet setA [ixNet getA $bgpObj -uptimeInSec]/singleValue -value $flap_up_time
                     }
                     if {$bgpV6Obj != ""} {
-                        ixNet setA [ixNet getA $bgpV6Obj -uptimeInSec]/singleValue -value $flap_up_time
+                        set ipPattern [ixNet getA [ixNet getA $bgpV6Obj -uptimeInSec] -pattern]
+			            SetMultiValues $bgpV6Obj "-uptimeInSec" $ipPattern $flap_up_time
+                        #ixNet setA [ixNet getA $bgpV6Obj -uptimeInSec]/singleValue -value $flap_up_time
                     }
                 }
                 ixNet commit
@@ -729,8 +794,10 @@ body BgpSession::set_route { args } {
                 } else {
                     set pLen $prefix_len
                 }
-                ixNet setA [ixNet getA $ipPoolObj -prefixLength]/singleValue -value $pLen
-                ixNet commit
+                set ipPattern [ixNet getA [ixNet getA $ipPoolObj -prefixLength] -pattern]
+			    SetMultiValues $ipPoolObj "-prefixLength" $ipPattern $pLen
+                #ixNet setA [ixNet getA $ipPoolObj -prefixLength]/singleValue -value $pLen
+                #ixNet commit
             }
             if { $step != "" } {
                 set stepvalue [GetIpV46Step $type $pLen $step]
@@ -748,12 +815,20 @@ body BgpSession::set_route { args } {
             if { $origin != "" } {
                 #origin are igp/egp/incomplete
                 if { $bgpIpRouteObj != "" } {
-                    ixNet setA [ixNet getA $bgpIpRouteObj -enableOrigin]/singleValue -value True
-                    ixNet setA [ixNet getA $bgpIpRouteObj -origin]/singleValue -value $origin
+                    set ipPattern [ixNet getA [ixNet getA $bgpIpRouteObj -enableOrigin] -pattern]
+			        SetMultiValues $bgpIpRouteObj "-enableOrigin" $ipPattern True
+                    #ixNet setA [ixNet getA $bgpIpRouteObj -enableOrigin]/singleValue -value True
+                    set ipPattern [ixNet getA [ixNet getA $bgpIpRouteObj -origin] -pattern]
+			        SetMultiValues $bgpIpRouteObj "-origin" $ipPattern $origin
+                    #ixNet setA [ixNet getA $bgpIpRouteObj -origin]/singleValue -value $origin
                 }
                 if { $bgpV6IpRouteObj != ""} {
-                    ixNet setA [ixNet getA $bgpV6IpRouteObj -enableOrigin]/singleValue -value True
-                    ixNet setA [ixNet getA $bgpV6IpRouteObj -origin]/singleValue -value $origin
+                    set ipPattern [ixNet getA [ixNet getA $bgpV6IpRouteObj -enableOrigin] -pattern]
+			        SetMultiValues $bgpV6IpRouteObj "-enableOrigin" $ipPattern True
+                    #ixNet setA [ixNet getA $bgpV6IpRouteObj -enableOrigin]/singleValue -value True
+                    set ipPattern [ixNet getA [ixNet getA $bgpV6IpRouteObj -origin] -pattern]
+			        SetMultiValues $bgpV6IpRouteObj "-origin" $ipPattern $origin
+                    #ixNet setA [ixNet getA $bgpV6IpRouteObj -origin]/singleValue -value $origin
                 }
                 ixNet commit
             }
@@ -761,23 +836,43 @@ body BgpSession::set_route { args } {
             if { $nexthop != "" } {
                 #nexthop is ipv4/ipv6 ip
                 if { $bgpIpRouteObj != "" } {
-                    ixNet setA [ixNet getA $bgpIpRouteObj -enableNextHop]/singleValue -value True
-                    ixNet setA [ixNet getA $bgpIpRouteObj -nextHopType]/singleValue -value manual
-                    ixNet setA [ixNet getA $bgpIpRouteObj -nextHopIPType]/singleValue -value $type
+                    set ipPattern [ixNet getA [ixNet getA $bgpIpRouteObj -enableNextHop] -pattern]
+			        SetMultiValues $bgpIpRouteObj "-enableNextHop" $ipPattern True
+			        #ixNet setA [ixNet getA $bgpIpRouteObj -enableNextHop]/singleValue -value True
+                    set ipPattern [ixNet getA [ixNet getA $bgpIpRouteObj -nextHopType] -pattern]
+			        SetMultiValues $bgpIpRouteObj "-nextHopType" $ipPattern manual
+                    #ixNet setA [ixNet getA $bgpIpRouteObj -nextHopType]/singleValue -value manual
+                    set ipPattern [ixNet getA [ixNet getA $bgpIpRouteObj -nextHopIPType] -pattern]
+			        SetMultiValues $bgpIpRouteObj "-nextHopIPType" $ipPattern $type
+                    #ixNet setA [ixNet getA $bgpIpRouteObj -nextHopIPType]/singleValue -value $type
                     if { $type == "ipv4" } {
-                        ixNet setA [ixNet getA $bgpIpRouteObj -ipv4NextHop]/singleValue -value $nexthop
+                        set ipPattern [ixNet getA [ixNet getA $bgpIpRouteObj -ipv4NextHop] -pattern]
+			            SetMultiValues $bgpIpRouteObj "-ipv4NextHop" $ipPattern $nexthop
+                        #ixNet setA [ixNet getA $bgpIpRouteObj -ipv4NextHop]/singleValue -value $nexthop
                     } else {
-                        ixNet setA [ixNet getA $bgpIpRouteObj -ipv6NextHop]/singleValue -value $nexthop
+                        set ipPattern [ixNet getA [ixNet getA $bgpIpRouteObj -ipv6NextHop] -pattern]
+			            SetMultiValues $bgpIpRouteObj "-ipv6NextHop" $ipPattern $nexthop
+                        #ixNet setA [ixNet getA $bgpIpRouteObj -ipv6NextHop]/singleValue -value $nexthop
                     }
                 }
                 if { $bgpV6IpRouteObj != "" } {
-                    ixNet setA [ixNet getA $bgpV6IpRouteObj -enableNextHop]/singleValue -value True
-                    ixNet setA [ixNet getA $bgpV6IpRouteObj -nextHopType]/singleValue -value manual
-                    ixNet setA [ixNet getA $bgpV6IpRouteObj -nextHopIPType]/singleValue -value $type
+                    set ipPattern [ixNet getA [ixNet getA $bgpV6IpRouteObj -enableNextHop] -pattern]
+			        SetMultiValues $bgpV6IpRouteObj "-enableNextHop" $ipPattern True
+                    #ixNet setA [ixNet getA $bgpV6IpRouteObj -enableNextHop]/singleValue -value True
+                    set ipPattern [ixNet getA [ixNet getA $bgpV6IpRouteObj -nextHopType] -pattern]
+			        SetMultiValues $bgpV6IpRouteObj "-nextHopType" $ipPattern manual
+                    #ixNet setA [ixNet getA $bgpV6IpRouteObj -nextHopType]/singleValue -value manual
+                    set ipPattern [ixNet getA [ixNet getA $bgpV6IpRouteObj -nextHopIPType] -pattern]
+			        SetMultiValues $bgpV6IpRouteObj "-nextHopIPType" $ipPattern $type
+                    #ixNet setA [ixNet getA $bgpV6IpRouteObj -nextHopIPType]/singleValue -value $type
                     if { $type == "ipv4" } {
-                        ixNet setA [ixNet getA $bgpV6IpRouteObj -ipv4NextHop]/singleValue -value $nexthop
+                        set ipPattern [ixNet getA [ixNet getA $bgpV6IpRouteObj -ipv4NextHop] -pattern]
+			            SetMultiValues $bgpV6IpRouteObj "-ipv4NextHop" $ipPattern $nexthop
+                        #ixNet setA [ixNet getA $bgpV6IpRouteObj -ipv4NextHop]/singleValue -value $nexthop
                     } else {
-                        ixNet setA [ixNet getA $bgpV6IpRouteObj -ipv6NextHop]/singleValue -value $nexthop
+                        set ipPattern [ixNet getA [ixNet getA $bgpV6IpRouteObj -ipv6NextHop] -pattern]
+			            SetMultiValues $bgpV6IpRouteObj "-ipv6NextHop" $ipPattern $nexthop
+                        #ixNet setA [ixNet getA $bgpV6IpRouteObj -ipv6NextHop]/singleValue -value $nexthop
                     }
                 }
                 ixNet commit
@@ -786,12 +881,20 @@ body BgpSession::set_route { args } {
             if { $med != "" } {
                 #med is integer value 10
                 if { $bgpIpRouteObj != "" } {
-                    ixNet setA [ixNet getA $bgpIpRouteObj -enableMultiExitDiscriminator]/singleValue -value True
-                    ixNet setA [ixNet getA $bgpIpRouteObj -multiExitDiscriminator]/singleValue -value $med
+                    set ipPattern [ixNet getA [ixNet getA $bgpIpRouteObj -enableMultiExitDiscriminator] -pattern]
+			        SetMultiValues $bgpIpRouteObj "-enableMultiExitDiscriminator" $ipPattern True
+                    #ixNet setA [ixNet getA $bgpIpRouteObj -enableMultiExitDiscriminator]/singleValue -value True
+                    set ipPattern [ixNet getA [ixNet getA $bgpIpRouteObj -multiExitDiscriminator] -pattern]
+			        SetMultiValues $bgpIpRouteObj "-multiExitDiscriminator" $ipPattern $med
+                    #ixNet setA [ixNet getA $bgpIpRouteObj -multiExitDiscriminator]/singleValue -value $med
                 }
                 if { $bgpV6IpRouteObj != "" } {
-                    ixNet setA [ixNet getA $bgpV6IpRouteObj -enableMultiExitDiscriminator]/singleValue -value True
-                    ixNet setA [ixNet getA $bgpV6IpRouteObj -multiExitDiscriminator]/singleValue -value $med
+                    set ipPattern [ixNet getA [ixNet getA $bgpV6IpRouteObj -enableMultiExitDiscriminator] -pattern]
+			        SetMultiValues $bgpV6IpRouteObj "-enableMultiExitDiscriminator" $ipPattern True
+                    #ixNet setA [ixNet getA $bgpV6IpRouteObj -enableMultiExitDiscriminator]/singleValue -value True
+                    set ipPattern [ixNet getA [ixNet getA $bgpV6IpRouteObj -multiExitDiscriminator] -pattern]
+			        SetMultiValues $bgpV6IpRouteObj "-multiExitDiscriminator" $ipPattern $med
+                    #ixNet setA [ixNet getA $bgpV6IpRouteObj -multiExitDiscriminator]/singleValue -value $med
                 }
                 ixNet commit
             }
@@ -799,14 +902,22 @@ body BgpSession::set_route { args } {
                 #Valid enum values are 0=dontincludelocalas 1=includelocalasasasseq 2=includelocalasasasset 3=includelocalasasasseqconfederation 4=includelocalasasassetconfederation 5=prependlocalastofirstsegment
                 if {$bgpIpRouteObj != ""} {
                     if { $enable_as_path == "true" } {
-                        ixNet setA [ixNet getA  $bgpIpRouteObj -enableAsPathSegments]/singleValue -value true
-                        ixNet setA [ixNet getA  $bgpIpRouteObj -asSetMode]/singleValue -value "dontincludelocalas"
+                        set ipPattern [ixNet getA [ixNet getA $bgpIpRouteObj -enableAsPathSegments] -pattern]
+			            SetMultiValues $bgpIpRouteObj "-enableAsPathSegments" $ipPattern True
+                        #ixNet setA [ixNet getA  $bgpIpRouteObj -enableAsPathSegments]/singleValue -value true
+                        set ipPattern [ixNet getA [ixNet getA $bgpIpRouteObj -asSetMode] -pattern]
+			            SetMultiValues $bgpIpRouteObj "-asSetMode" $ipPattern "dontincludelocalas"
+                        #ixNet setA [ixNet getA  $bgpIpRouteObj -asSetMode]/singleValue -value "dontincludelocalas"
                     }
                 }
                 if {$bgpV6IpRouteObj != ""} {
                     if { $enable_as_path == "true" } {
-                        ixNet setA [ixNet getA  $bgpV6IpRouteObj -enableAsPathSegments]/singleValue -value true
-                        ixNet setA [ixNet getA  $bgpV6IpRouteObj -asSetMode]/singleValue -value "dontincludelocalas"
+                        set ipPattern [ixNet getA [ixNet getA $bgpV6IpRouteObj -enableAsPathSegments] -pattern]
+			            SetMultiValues $bgpV6IpRouteObj "-enableAsPathSegments" $ipPattern True
+                        #ixNet setA [ixNet getA  $bgpV6IpRouteObj -enableAsPathSegments]/singleValue -value true
+                        set ipPattern [ixNet getA [ixNet getA $bgpV6IpRouteObj -asSetMode] -pattern]
+			            SetMultiValues $bgpV6IpRouteObj "-asSetMode" $ipPattern "dontincludelocalas"
+                        #ixNet setA [ixNet getA  $bgpV6IpRouteObj -asSetMode]/singleValue -value "dontincludelocalas"
                     }
                 }
                 ixNet commit
@@ -816,30 +927,44 @@ body BgpSession::set_route { args } {
                 #values 1=asset 2=asseq 4=assetconfederation 3=asseqconfederation
                 if { $bgpIpRouteObj != "" } {
                     set bgpAsPathObj [ixNet getL $bgpIpRouteObj bgpAsPathSegmentList]
-                    ixNet setA [ixNet getA $bgpAsPathObj -segmentType]/singleValue -value $as_path
+                    set ipPattern [ixNet getA [ixNet getA $bgpAsPathObj -segmentType] -pattern]
+			        SetMultiValues $bgpAsPathObj "-segmentType" $ipPattern $as_path
+                    #ixNet setA [ixNet getA $bgpAsPathObj -segmentType]/singleValue -value $as_path
                 }
                 if { $bgpV6IpRouteObj != "" } {
                     set bgpAsPathObj [ixNet getL $bgpV6IpRouteObj bgpAsPathSegmentList]
-                    ixNet setA [ixNet getA $bgpAsPathObj -segmentType]/singleValue -value $as_path
+                    set ipPattern [ixNet getA [ixNet getA $bgpAsPathObj -segmentType] -pattern]
+			        SetMultiValues $bgpAsPathObj "-segmentType" $ipPattern $as_path
+                    #ixNet setA [ixNet getA $bgpAsPathObj -segmentType]/singleValue -value $as_path
                 }
             }
 
             if { $local_pref != "" } {
                 #local_pref int value
                 if { $bgpIpRouteObj != "" } {
-                    ixNet setA [ixNet getA $bgpIpRouteObj -enableLocalPreference]/singleValue -value True
-                    ixNet setA [ixNet getA $bgpIpRouteObj -localPreference]/singleValue -value $local_pref
+                    set ipPattern [ixNet getA [ixNet getA $bgpIpRouteObj -enableLocalPreference] -pattern]
+			        SetMultiValues $bgpIpRouteObj "-enableLocalPreference" $ipPattern True
+                    #ixNet setA [ixNet getA $bgpIpRouteObj -enableLocalPreference]/singleValue -value True
+                    set ipPattern [ixNet getA [ixNet getA $bgpIpRouteObj -localPreference] -pattern]
+			        SetMultiValues $bgpIpRouteObj "-localPreference" $ipPattern $local_pref
+                    #ixNet setA [ixNet getA $bgpIpRouteObj -localPreference]/singleValue -value $local_pref
                 }
                 if { $bgpV6IpRouteObj != "" } {
-                    ixNet setA [ixNet getA $bgpV6IpRouteObj -enableLocalPreference]/singleValue -value True
-                    ixNet setA [ixNet getA $bgpV6IpRouteObj -localPreference]/singleValue -value $local_pref
+                    set ipPattern [ixNet getA [ixNet getA $bgpV6IpRouteObj -enableLocalPreference] -pattern]
+			        SetMultiValues $bgpV6IpRouteObj "-enableLocalPreference" $ipPattern True
+                    #ixNet setA [ixNet getA $bgpV6IpRouteObj -enableLocalPreference]/singleValue -value True
+                    set ipPattern [ixNet getA [ixNet getA $bgpV6IpRouteObj -localPreference] -pattern]
+			        SetMultiValues $bgpV6IpRouteObj "-localPreference" $ipPattern $local_pref
+                    #ixNet setA [ixNet getA $bgpV6IpRouteObj -localPreference]/singleValue -value $local_pref
                 }
                 ixNet commit
             }
 
             if { $cluster_list != "" } {
                 if { $bgpIpRouteObj != "" } {
-                    ixNet setA [ixNet getA $bgpIpRouteObj -enableCluster]/singleValue -value True
+                    set ipPattern [ixNet getA [ixNet getA $bgpIpRouteObj -enableCluster] -pattern]
+			        SetMultiValues $bgpIpRouteObj "-enableCluster" $ipPattern True
+                    #ixNet setA [ixNet getA $bgpIpRouteObj -enableCluster]/singleValue -value True
                     set clusterNum 1
                     foreach clusterElement  $cluster_list {
                         if { [IsIPv4Address $clusterElement] } {
@@ -852,7 +977,9 @@ body BgpSession::set_route { args } {
                     set clusterObjList [ixNet getL $bgpIpRouteObj bgpClusterIdList]
                 }
                 if { $bgpV6IpRouteObj != "" } {
-                    ixNet setA [ixNet getA $bgpV6IpRouteObj -enableCluster]/singleValue -value True
+                    set ipPattern [ixNet getA [ixNet getA $bgpV6IpRouteObj -enableCluster] -pattern]
+			        SetMultiValues $bgpV6IpRouteObj "-enableCluster" $ipPattern True
+                    #ixNet setA [ixNet getA $bgpV6IpRouteObj -enableCluster]/singleValue -value True
                     set clusterNum 1
                     foreach clusterElement  $cluster_list {
                         if { [IsIPv4Address $clusterElement] } {
@@ -865,28 +992,42 @@ body BgpSession::set_route { args } {
                     set clusterObjList [ixNet getL $bgpV6IpRouteObj bgpClusterIdList]
                 }
                 foreach cluster $cluster_list clusterObj $clusterObjList {
-                    ixNet setA [ixNet getA $clusterObj -clusterId]/singleValue -value $cluster
+                    set ipPattern [ixNet getA [ixNet getA $clusterObj -clusterId] -pattern]
+			        SetMultiValues $clusterObj "-clusterId" $ipPattern $cluster
+                    #ixNet setA [ixNet getA $clusterObj -clusterId]/singleValue -value $cluster
                 }
             }
 
             if { $flag_atomic_agg != "" } {
                 # agg_as int value/agg_ip ipv4 ip
                 if { $bgpIpRouteObj != "" } {
-                    ixNet setA [ixNet getA $bgpIpRouteObj -enableAggregatorId]/singleValue -value True
+                    set ipPattern [ixNet getA [ixNet getA $bgpIpRouteObj -enableAggregatorId] -pattern]
+			        SetMultiValues $bgpIpRouteObj "-enableAggregatorId" $ipPattern True
+                    #ixNet setA [ixNet getA $bgpIpRouteObj -enableAggregatorId]/singleValue -value True
                     if { $agg_as != "" } {
-                        ixNet setA [ixNet getA $bgpIpRouteObj -aggregatorAs]/singleValue -value $agg_as
+                        set ipPattern [ixNet getA [ixNet getA $bgpIpRouteObj -aggregatorAs] -pattern]
+			            SetMultiValues $bgpIpRouteObj "-aggregatorAs" $ipPattern $agg_as
+                        #ixNet setA [ixNet getA $bgpIpRouteObj -aggregatorAs]/singleValue -value $agg_as
                     }
                     if { $agg_ip != "" } {
-                        ixNet setA [ixNet getA $bgpIpRouteObj -aggregatorId]/singleValue -value $agg_ip
+                        set ipPattern [ixNet getA [ixNet getA $bgpIpRouteObj -aggregatorId] -pattern]
+			            SetMultiValues $bgpIpRouteObj "-aggregatorId" $ipPattern $agg_ip
+                        #ixNet setA [ixNet getA $bgpIpRouteObj -aggregatorId]/singleValue -value $agg_ip
                     }
                 }
                 if { $bgpV6IpRouteObj != "" } {
-                    ixNet setA [ixNet getA $bgpV6IpRouteObj -enableAggregatorId]/singleValue -value True
+                    set ipPattern [ixNet getA [ixNet getA $bgpV6IpRouteObj -enableAggregatorId] -pattern]
+			        SetMultiValues $bgpV6IpRouteObj "-enableAggregatorId" $ipPattern True
+                    #ixNet setA [ixNet getA $bgpV6IpRouteObj -enableAggregatorId]/singleValue -value True
                     if { $agg_as != "" } {
-                        ixNet setA [ixNet getA $bgpV6IpRouteObj -aggregatorAs]/singleValue -value $agg_as
+                        set ipPattern [ixNet getA [ixNet getA $bgpV6IpRouteObj -aggregatorAs] -pattern]
+			            SetMultiValues $bgpV6IpRouteObj "-aggregatorAs" $ipPattern $agg_as
+                        #ixNet setA [ixNet getA $bgpV6IpRouteObj -aggregatorAs]/singleValue -value $agg_as
                     }
                     if { $agg_ip != "" } {
-                        ixNet setA [ixNet getA $bgpV6IpRouteObj -aggregatorId]/singleValue -value $agg_ip
+                        set ipPattern [ixNet getA [ixNet getA $bgpV6IpRouteObj -aggregatorId] -pattern]
+			            SetMultiValues $bgpV6IpRouteObj "-aggregatorId" $ipPattern $agg_ip
+                        #ixNet setA [ixNet getA $bgpV6IpRouteObj -aggregatorId]/singleValue -value $agg_ip
                     }
                 }
 
@@ -895,12 +1036,20 @@ body BgpSession::set_route { args } {
             if { $originator_id != "" } {
                 #$originator_id ipv4 ip
                 if { $bgpIpRouteObj != "" } {
-                    ixNet setA [ixNet getA $bgpIpRouteObj -enableOriginatorId]/singleValue -value True
-                    ixNet setA [ixNet getA $bgpIpRouteObj -originatorId]/singleValue -value $originator_id
+                    set ipPattern [ixNet getA [ixNet getA $bgpIpRouteObj -enableOriginatorId] -pattern]
+			        SetMultiValues $bgpIpRouteObj "-enableOriginatorId" $ipPattern True
+                    #ixNet setA [ixNet getA $bgpIpRouteObj -enableOriginatorId]/singleValue -value True
+                    set ipPattern [ixNet getA [ixNet getA $bgpIpRouteObj -originatorId] -pattern]
+			        SetMultiValues $bgpIpRouteObj "-originatorId" $ipPattern $originator_id
+                    #ixNet setA [ixNet getA $bgpIpRouteObj -originatorId]/singleValue -value $originator_id
                 }
                 if { $bgpV6IpRouteObj != "" } {
-                    ixNet setA [ixNet getA $bgpV6IpRouteObj -enableOriginatorId]/singleValue -value True
-                    ixNet setA [ixNet getA $bgpV6IpRouteObj -originatorId]/singleValue -value $originator_id
+                    set ipPattern [ixNet getA [ixNet getA $bgpV6IpRouteObj -enableOriginatorId] -pattern]
+			        SetMultiValues $bgpV6IpRouteObj "-enableOriginatorId" $ipPattern True
+                    #ixNet setA [ixNet getA $bgpV6IpRouteObj -enableOriginatorId]/singleValue -value True
+                    set ipPattern [ixNet getA [ixNet getA $bgpV6IpRouteObj -originatorId] -pattern]
+			        SetMultiValues $bgpV6IpRouteObj "-originatorId" $ipPattern $originator_id
+                    #ixNet setA [ixNet getA $bgpV6IpRouteObj -originatorId]/singleValue -value $originator_id
                 }
                 ixNet commit
             }
@@ -908,7 +1057,9 @@ body BgpSession::set_route { args } {
             if { $communities != "" } {
                 #$communities hex value
                 if { $bgpIpRouteObj != "" } {
-                    ixNet setA [ixNet getA $bgpIpRouteObj -enableCommunity]/singleValue -value True
+                    set ipPattern [ixNet getA [ixNet getA $bgpIpRouteObj -enableCommunity] -pattern]
+			        SetMultiValues $bgpIpRouteObj "-enableCommunity" $ipPattern True
+                    #ixNet setA [ixNet getA $bgpIpRouteObj -enableCommunity]/singleValue -value True
                     set hexcommunity ""
                     foreach element [split $communities : ] {
                         set hexcommunity $hexcommunity[Int2Hex $element 4]
@@ -917,7 +1068,9 @@ body BgpSession::set_route { args } {
                     ixNet setA $bgpIpRouteObj -noOfCommunities $communities
                 }
                 if { $bgpV6IpRouteObj != "" } {
-                    ixNet setA [ixNet getA $bgpV6IpRouteObj -enableCommunity]/singleValue -value True
+                    set ipPattern [ixNet getA [ixNet getA $bgpV6IpRouteObj -enableCommunity] -pattern]
+			        SetMultiValues $bgpV6IpRouteObj "-enableCommunity" $ipPattern True
+                    #ixNet setA [ixNet getA $bgpV6IpRouteObj -enableCommunity]/singleValue -value True
                     set hexcommunity ""
                     foreach element [split $communities : ] {
                         set hexcommunity $hexcommunity[Int2Hex $element 4]
@@ -961,15 +1114,19 @@ body BgpSession::advertise_route { args } {
     #Deputs "advertise_route values of route_block is ::$route_block"
 	if { [ info exists route_block ] } {
 	    set networkGroupObj $routeBlock($route_block)
-	    ixNet setA [ixNet getA $networkGroupObj -enabled]/singleValue -value True
-        ixNet commit
+	    set ipPattern [ixNet getA [ixNet getA $networkGroupObj -enabled] -pattern]
+	    SetMultiValues $networkGroupObj "-enabled" $ipPattern True
+	    #ixNet setA [ixNet getA $networkGroupObj -enabled]/singleValue -value True
+        #ixNet commit
 	} else {
         if { $LoadConfigMode } {
             set devicehandle [GetDependentNgpfProtocolHandle $bgpHandle "deviceGroup"]
             set routeRangeList  [ixNet getL $devicehandle networkGroup]
             if { $routeRangeList != "" } {
                 foreach rRangeObj $routeRangeList {
-                    ixNet setA [ixNet getA $rRangeObj -enabled]/singleValue -value True
+                    set ipPattern [ixNet getA [ixNet getA $rRangeObj -enabled] -pattern]
+			        SetMultiValues $rRangeObj "-enabled" $ipPattern True
+                    #ixNet setA [ixNet getA $rRangeObj -enabled]/singleValue -value True
                 }
                 ixNet commit
             }
@@ -1006,7 +1163,9 @@ body BgpSession::advertise_route { args } {
                 set routeRangeList  [ixNet getL $devicehandle networkGroup]
                 foreach hRouteBlock $routeRangeList {
                     Deputs "hRouteBlock : $hRouteBlock"
-                    ixNet setA [ixNet getA $hRouteBlock -enabled]/singleValue -value True
+                    set ipPattern [ixNet getA [ixNet getA $hRouteBlock -enabled] -pattern]
+			        SetMultiValues $hRouteBlock "-enabled" $ipPattern True
+                    #ixNet setA [ixNet getA $hRouteBlock -enabled]/singleValue -value True
                 }
         }
 	}
@@ -1036,8 +1195,10 @@ body BgpSession::withdraw_route { args } {
 
 	if { [ info exists route_block ] } {
 	    set networkGroupObj $routeBlock($route_block)
-	    ixNet setA [ixNet getA $networkGroupObj -enabled]/singleValue -value False
-        ixNet commit
+	    set ipPattern [ixNet getA [ixNet getA $networkGroupObj -enabled] -pattern]
+	    SetMultiValues $networkGroupObj "-enabled" $ipPattern False
+	    #ixNet setA [ixNet getA $networkGroupObj -enabled]/singleValue -value False
+        #ixNet commit
 	} else {
          if { $LoadConfigMode } {
             #set devicehandle [$this cget -deviceHandle]
@@ -1046,7 +1207,9 @@ body BgpSession::withdraw_route { args } {
             set routeRangeList  [ixNet getL $devicehandle networkGroup]
             if { $routeRangeList != "" } {
                 foreach rRangeObj $routeRangeList {
-                    ixNet setA [ixNet getA $rRangeObj -enabled]/singleValue -value False
+                    set ipPattern [ixNet getA [ixNet getA $rRangeObj -enabled] -pattern]
+			        SetMultiValues $rRangeObj "-enabled" $ipPattern False
+                    #ixNet setA [ixNet getA $rRangeObj -enabled]/singleValue -value False
                 }
                 ixNet commit
             }
@@ -1083,7 +1246,9 @@ body BgpSession::withdraw_route { args } {
             set devicehandle [GetDependentNgpfProtocolHandle $bgpHandle "deviceGroup"]
             set routeRangeList  [ixNet getL $devicehandle networkGroup]
             foreach hRouteBlock $routeRangeList {
-                ixNet setA [ixNet getA $hRouteBlock -enabled]/singleValue -value False
+                set ipPattern [ixNet getA [ixNet getA $hRouteBlock -enabled] -pattern]
+			    SetMultiValues $hRouteBlock "-enabled" $ipPattern False
+                #ixNet setA [ixNet getA $hRouteBlock -enabled]/singleValue -value False
             }
         }
 	}
@@ -1295,7 +1460,9 @@ body SimRoute::config { args } {
                     set pLen $prefix_len
                 }
                 #not accepting 255.255.255.0 for prefix_len, but taking integer value
-                ixNet setA [ixNet getA $ipPoolObj -prefixLength]/singleValue -value $pLen
+                set ipPattern [ixNet getA [ixNet getA $ipPoolObj -prefixLength] -pattern]
+			    SetMultiValues $ipPoolObj "-prefixLength" $ipPattern $pLen
+                #ixNet setA [ixNet getA $ipPoolObj -prefixLength]/singleValue -value $pLen
                 ixNet commit
             }
             if { $step != "" } {
@@ -1353,13 +1520,21 @@ body SimRoute::config { args } {
 
     if { [info exists origin ]} {
         if {$bgpSimRouteObj != ""} {
-            ixNet setA [ixNet getA $bgpSimRouteObj -enableOrigin]/singleValue -value True
-            ixNet setA [ixNet getA $bgpSimRouteObj -origin]/singleValue -value $origin
+            set ipPattern [ixNet getA [ixNet getA $bgpSimRouteObj -enableOrigin] -pattern]
+			SetMultiValues $bgpSimRouteObj "-enableOrigin" $ipPattern True
+            #ixNet setA [ixNet getA $bgpSimRouteObj -enableOrigin]/singleValue -value True
+            set ipPattern [ixNet getA [ixNet getA $bgpSimRouteObj -origin] -pattern]
+			SetMultiValues $bgpSimRouteObj "-origin" $ipPattern $origin
+            #ixNet setA [ixNet getA $bgpSimRouteObj -origin]/singleValue -value $origin
         }
 
         if {$bgpV6SimRouteObj != ""} {
-            ixNet setA [ixNet getA $bgpV6SimRouteObj -enableOrigin]/singleValue -value True
-            ixNet setA [ixNet getA $bgpV6SimRouteObj -origin]/singleValue -value $origin
+            set ipPattern [ixNet getA [ixNet getA $bgpV6SimRouteObj -enableOrigin] -pattern]
+			SetMultiValues $bgpV6SimRouteObj "-enableOrigin" $ipPattern True
+            #ixNet setA [ixNet getA $bgpV6SimRouteObj -enableOrigin]/singleValue -value True
+            set ipPattern [ixNet getA [ixNet getA $bgpV6SimRouteObj -origin] -pattern]
+			SetMultiValues $bgpV6SimRouteObj "-origin" $ipPattern $origin
+            #ixNet setA [ixNet getA $bgpV6SimRouteObj -origin]/singleValue -value $origin
         }
         #origin are igp/egp/incomplete
     }
@@ -1367,16 +1542,24 @@ body SimRoute::config { args } {
     if {[info exists enable_as_path ]} {
         if {$bgpSimRouteObj != ""} {
             if { $enable_as_path == "true" } {
-                ixNet setA [ixNet getA  $bgpSimRouteObj -enableAsPathSegments]/singleValue -value true
+                set ipPattern [ixNet getA [ixNet getA $bgpSimRouteObj -enableAsPathSegments] -pattern]
+			    SetMultiValues $bgpSimRouteObj "-enableAsPathSegments" $ipPattern True
+                #ixNet setA [ixNet getA  $bgpSimRouteObj -enableAsPathSegments]/singleValue -value true
             } elseif {$enable_as_path == "false" } {
-                ixNet setA [ixNet getA  $bgpSimRouteObj -enableAsPathSegments]/singleValue -value false
+                set ipPattern [ixNet getA [ixNet getA $bgpSimRouteObj -enableAsPathSegments] -pattern]
+			    SetMultiValues $bgpSimRouteObj "-enableAsPathSegments" $ipPattern False
+                #ixNet setA [ixNet getA  $bgpSimRouteObj -enableAsPathSegments]/singleValue -value false
             }
         }
         if {$bgpV6SimRouteObj != ""} {
             if { $enable_as_path == "true" } {
-                ixNet setA [ixNet getA  $bgpV6SimRouteObj -enableAsPathSegments]/singleValue -value true
+                set ipPattern [ixNet getA [ixNet getA $bgpV6SimRouteObj -enableAsPathSegments] -pattern]
+			    SetMultiValues $bgpV6SimRouteObj "-enableAsPathSegments" $ipPattern True
+                #ixNet setA [ixNet getA  $bgpV6SimRouteObj -enableAsPathSegments]/singleValue -value true
             } elseif {$enable_as_path == "false" } {
-                ixNet setA [ixNet getA  $bgpV6SimRouteObj -enableAsPathSegments]/singleValue -value false
+                set ipPattern [ixNet getA [ixNet getA $bgpV6SimRouteObj -enableAsPathSegments] -pattern]
+			    SetMultiValues $bgpV6SimRouteObj "-enableAsPathSegments" $ipPattern False
+                #ixNet setA [ixNet getA  $bgpV6SimRouteObj -enableAsPathSegments]/singleValue -value false
             }
         }
     }
@@ -1386,11 +1569,15 @@ body SimRoute::config { args } {
             set as_path_type [string tolower $as_path_type]
             if {$bgpSimRouteObj != ""} {
                 set bgpAsPathObj [ixNet getL $bgpSimRouteObj bgpAsPathSegmentList]
-                ixNet setA [ixNet getA $bgpAsPathObj -segmentType]/singleValue -value $as_path_type
+                set ipPattern [ixNet getA [ixNet getA $bgpAsPathObj -segmentType] -pattern]
+			    SetMultiValues $bgpAsPathObj "-segmentType" $ipPattern $as_path_type
+                #ixNet setA [ixNet getA $bgpAsPathObj -segmentType]/singleValue -value $as_path_type
             }
             if {$bgpV6SimRouteObj != ""} {
                 set bgpAsPathObj [ixNet getL $bgpV6SimRouteObj bgpAsPathSegmentList]
-                ixNet setA [ixNet getA $bgpAsPathObj -segmentType]/singleValue -value $as_path_type
+                set ipPattern [ixNet getA [ixNet getA $bgpAsPathObj -segmentType] -pattern]
+			    SetMultiValues $bgpAsPathObj "-segmentType" $ipPattern $as_path_type
+                #ixNet setA [ixNet getA $bgpAsPathObj -segmentType]/singleValue -value $as_path_type
             }
         }
     }
@@ -1398,10 +1585,14 @@ body SimRoute::config { args } {
     if {[info exist as_path_option]} {
         if {$as_path_option != ""} {
             if {$bgpSimRouteObj != ""} {
-                ixNet setA [ixNet getA  $bgpSimRouteObj -asSetMode]/singleValue -value $as_path_option
+                set ipPattern [ixNet getA [ixNet getA $bgpSimRouteObj -asSetMode] -pattern]
+			    SetMultiValues $bgpSimRouteObj "-asSetMode" $ipPattern $as_path_option
+                #ixNet setA [ixNet getA  $bgpSimRouteObj -asSetMode]/singleValue -value $as_path_option
             }
             if {$bgpV6SimRouteObj != ""} {
-                ixNet setA [ixNet getA  $bgpV6SimRouteObj -asSetMode]/singleValue -value $as_path_option
+                set ipPattern [ixNet getA [ixNet getA $bgpV6SimRouteObj -asSetMode] -pattern]
+			    SetMultiValues $bgpV6SimRouteObj "-asSetMode" $ipPattern $as_path_option
+                #ixNet setA [ixNet getA  $bgpV6SimRouteObj -asSetMode]/singleValue -value $as_path_option
             }
         }
     }
@@ -1545,18 +1736,26 @@ body Vpn::config { args } {
         }
 
         if { $asNumber != "" } {
-            ixNet setA [ixNet getA $bgpImportObjList -targetAsNumber]/singleValue -value $asNumber
+            set ipPattern [ixNet getA [ixNet getA $bgpImportObjList -targetAsNumber] -pattern]
+			SetMultiValues $bgpImportObjList "-targetAsNumber" $ipPattern $asNumber
+            #ixNet setA [ixNet getA $bgpImportObjList -targetAsNumber]/singleValue -value $asNumber
         }
 
         if { $assignedNumber != "" } {
-	        ixNet setA [ixNet getA $bgpImportObjList -targetAssignedNumber]/singleValue -value $assignedNumber
+	        set ipPattern [ixNet getA [ixNet getA $bgpImportObjList -targetAssignedNumber] -pattern]
+			SetMultiValues $bgpImportObjList "-targetAssignedNumber" $ipPattern $assignedNumber
+	        #ixNet setA [ixNet getA $bgpImportObjList -targetAssignedNumber]/singleValue -value $assignedNumber
         }	
 		
 		if { $asType != "" } {
-	        ixNet setA [ixNet getA $bgpImportObjList -targetType]/singleValue -value $asType
+	        set ipPattern [ixNet getA [ixNet getA $bgpImportObjList -targetType] -pattern]
+			SetMultiValues $bgpImportObjList "-targetType" $ipPattern $asType
+	        #ixNet setA [ixNet getA $bgpImportObjList -targetType]/singleValue -value $asType
         }
 		if { $ipAddr != "" } {
-	        ixNet setA [ixNet getA $bgpImportObjList -targetIpAddress]/singleValue -value $ipAddr
+	        set ipPattern [ixNet getA [ixNet getA $bgpImportObjList -targetIpAddress] -pattern]
+			SetMultiValues $bgpImportObjList "-targetIpAddress" $ipPattern $ipAddr
+	        #ixNet setA [ixNet getA $bgpImportObjList -targetIpAddress]/singleValue -value $ipAddr
         }		
 		
 	}
@@ -1704,7 +1903,9 @@ body Vpn::set_route { args } {
                 } else {
                     set pLen $prefix_len
                 }
-                ixNet setA [ixNet getA $ipPoolObj -prefixLength]/singleValue -value $pLen
+                set ipPattern [ixNet getA [ixNet getA $ipPoolObj -prefixLength] -pattern]
+			    SetMultiValues $ipPoolObj "-prefixLength" $ipPattern $pLen
+                #ixNet setA [ixNet getA $ipPoolObj -prefixLength]/singleValue -value $pLen
                 ixNet commit
             }
             if { $step != "" } {
@@ -1724,36 +1925,52 @@ body Vpn::set_route { args } {
 			
             if { $bgpVpnRouteObj != "" } {
                 if { $asNumber != "" } {
-                    ixNet setA [ ixNet getA $bgpVpnRouteObj -distinguisherAsNumber]/singleValue -value $asNumber	
+                    set ipPattern [ixNet getA [ixNet getA $bgpVpnRouteObj -distinguisherAsNumber] -pattern]
+			        SetMultiValues $bgpVpnRouteObj "-distinguisherAsNumber" $ipPattern $asNumber
+                    #ixNet setA [ ixNet getA $bgpVpnRouteObj -distinguisherAsNumber]/singleValue -value $asNumber
                 }
 
                 if { $rdType != "" } {
-                    ixNet setA [ ixNet getA $bgpVpnRouteObj -distinguisherType]/singleValue -value $rdType	
+                    set ipPattern [ixNet getA [ixNet getA $bgpVpnRouteObj -distinguisherType] -pattern]
+			        SetMultiValues $bgpVpnRouteObj "-distinguisherType" $ipPattern $rdType
+                    #ixNet setA [ ixNet getA $bgpVpnRouteObj -distinguisherType]/singleValue -value $rdType
                 }	
 		
   		        if { $ipNumber != "" } {
-                    ixNet setA [ ixNet getA $bgpVpnRouteObj -distinguisherIpAddress]/singleValue -value $ipNumber	
+                    set ipPattern [ixNet getA [ixNet getA $bgpVpnRouteObj -distinguisherIpAddress] -pattern]
+			        SetMultiValues $bgpVpnRouteObj "-distinguisherIpAddress" $ipPattern $ipNumber
+                    #ixNet setA [ ixNet getA $bgpVpnRouteObj -distinguisherIpAddress]/singleValue -value $ipNumber
                 }	
 		        if { $assignedNumber != "" } {
-                    ixNet setA [ ixNet getA $bgpVpnRouteObj -distinguisherAssignedNumber]/singleValue -value $assignedNumber	
+                    set ipPattern [ixNet getA [ixNet getA $bgpVpnRouteObj -distinguisherAssignedNumber] -pattern]
+			        SetMultiValues $bgpVpnRouteObj "-distinguisherAssignedNumber" $ipPattern $assignedNumber
+                    #ixNet setA [ ixNet getA $bgpVpnRouteObj -distinguisherAssignedNumber]/singleValue -value $assignedNumber
                 }
 		    ixNet commit
 
             }
             if { $bgpV6VpnRouteObj != ""} {
                 if { $asNumber != "" } {
-                    ixNet setA [ ixNet getA $bgpV6VpnRouteObj -distinguisherAsNumber]/singleValue -value $asNumber	
+                    set ipPattern [ixNet getA [ixNet getA $bgpV6VpnRouteObj -distinguisherAsNumber] -pattern]
+			        SetMultiValues $bgpV6VpnRouteObj "-distinguisherAsNumber" $ipPattern $asNumber
+                    #ixNet setA [ ixNet getA $bgpV6VpnRouteObj -distinguisherAsNumber]/singleValue -value $asNumber
                 }
 
                 if { $rdType != "" } {
-                   ixNet setA [ ixNet getA $bgpV6VpnRouteObj -distinguisherType]/singleValue -value $rdType	
+                   set ipPattern [ixNet getA [ixNet getA $bgpV6VpnRouteObj -distinguisherType] -pattern]
+			       SetMultiValues $bgpV6VpnRouteObj "-distinguisherType" $ipPattern $rdType
+                   #ixNet setA [ ixNet getA $bgpV6VpnRouteObj -distinguisherType]/singleValue -value $rdType
                 }	
 		
 	   	        if { $ipNumber != "" } {
-                   ixNet setA [ ixNet getA $bgpV6VpnRouteObj -distinguisherIpAddress]/singleValue -value $ipNumber	
+                   set ipPattern [ixNet getA [ixNet getA $bgpV6VpnRouteObj -distinguisherIpAddress] -pattern]
+			       SetMultiValues $bgpV6VpnRouteObj "-distinguisherIpAddress" $ipPattern $ipNumber
+                   #ixNet setA [ ixNet getA $bgpV6VpnRouteObj -distinguisherIpAddress]/singleValue -value $ipNumber
                 }	
 		        if { $assignedNumber != "" } {
-                    ixNet setA [ ixNet getA $bgpV6VpnRouteObj -distinguisherAssignedNumber]/singleValue -value $assignedNumber	
+                    set ipPattern [ixNet getA [ixNet getA $bgpV6VpnRouteObj -distinguisherAssignedNumber] -pattern]
+			        SetMultiValues $bgpV6VpnRouteObj "-distinguisherAssignedNumber" $ipPattern $assignedNumber
+                    #ixNet setA [ ixNet getA $bgpV6VpnRouteObj -distinguisherAssignedNumber]/singleValue -value $assignedNumber
                 }
 			
 			ixNet commit
