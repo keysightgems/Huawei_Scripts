@@ -181,7 +181,6 @@ body BgpSession::reborn { {version ipv4}  } {
     } ] } {
         error "$errNumber(1) Port Object in BgpSession ctor"
     }
-
     #-- add interface and bgp protocol
     set bgpObj ""
     set topoObjList [ixNet getL [ixNet getRoot] topology]
@@ -325,6 +324,8 @@ body BgpSession::reborn { {version ipv4}  } {
                 }
             }
         }
+        ixNet setA $bgpObj -name $this
+        ixNet commit
     }
 
     #-- set capability
@@ -348,7 +349,7 @@ body BgpSession::config { args } {
     global errorInfo
     global errNumber
     if { [ catch {
-        set handle   [ $portObj cget -handle ]
+        set handle   [ $this cget -bgpHandle ]
     } ] } {
         error "$errNumber(1) Port Object in BgpSession ctor"
     }
@@ -433,11 +434,36 @@ body BgpSession::config { args } {
             }
 		}
     }
-
-	if { $handle == "" } {
+    if { $handle == "" } {
 		reborn $ip_version
 	}
-
+	if { $handle != "" && ![ info exists ip_version ]} {
+	    if {[string first "ipv4" $handle] != -1} {
+            if { ![ info exists ipv6_addr ] && [ info exists ipv4_addr ] } {
+                set ip_version "ipv4"
+            } else {
+                set ip_version "ipv6"
+            }
+        } else {
+            if { [ info exists ipv6_addr ] && ![ info exists ipv4_addr ] } {
+                set ip_version "ipv6"
+            } else {
+                set ip_version "ipv4"
+            }
+        }
+	}
+    if {([ info exists ipv6_addr ] && ![ info exists ipv4_addr ]) || $ip_version == "ipv6"} {
+        set topoObjList [ixNet getL [ixNet getRoot] topology]
+        foreach topoObj $topoObjList {
+            set vportObj [ixNet getA $topoObj -vports]
+            if {$vportObj == $hPort} {
+                ixNet remove $topoObj
+                ixNet commit
+            }
+            break
+        }
+        reborn "ipv6"
+    }
     set topoObjList [ixNet getL [ixNet getRoot] topology]
     foreach topoObj $topoObjList {
         set vportObj [ixNet getA $topoObj -vports]
@@ -446,14 +472,23 @@ body BgpSession::config { args } {
             foreach deviceGroupObj $deviceGroupObjList {
                 set ethernetObj [ixNet getL $deviceGroupObj ethernet]
                 if { [ info exists ipv4_addr ] } {
-                    if { $ip_version == "ipv4" } {
+                    #if { $ip_version == "ipv4" } {
                         Deputs "ipv4: [ixNet getL $ethernetObj ipv4]"
                         set ipv4Obj [ixNet getL $ethernetObj ipv4]
+                        if {$ipv4Obj == ""} {
+                            set ipv4Obj [ixNet add $ethernetObj ipv4]
+                            ixNet commit
+                            set bgpObj [ixNet add $ipv4Obj bgpIpv4Peer]
+                            ixNet commit
+                            set bgpObj [ ixNet remapIds $bgpObj ]
+                            ixNet setA $bgpObj -name $this
+                            ixNet commit
+                        }
                         set ipPattern [ixNet getA [ixNet getA $ipv4Obj -address] -pattern]
 			            SetMultiValues $ipv4Obj "-address" $ipPattern $ipv4_addr
                         #ixNet setA [ixNet getA $ipv4Obj -address]/singleValue -value $ipv4_addr
                         ixNet commit
-                    }
+                    #}
                 }
                 if { [ info exists ipv6_addr ] } {
                     set ipv6Obj [ixNet getL $ethernetObj ipv6]
@@ -794,13 +829,24 @@ body BgpSession::set_route { args } {
                 } else {
                     set pLen $prefix_len
                 }
-                set ipPattern [ixNet getA [ixNet getA $ipPoolObj -prefixLength] -pattern]
-			    SetMultiValues $ipPoolObj "-prefixLength" $ipPattern $pLen
-                #ixNet setA [ixNet getA $ipPoolObj -prefixLength]/singleValue -value $pLen
-                #ixNet commit
+            } else {
+                if {$type == "ipv4"} {
+                    set pLen 24
+                } else {
+                    set pLen 64
+                }
             }
+            #not accepting 255.255.255.0 for prefix_len, but taking integer value
+            set ipPattern [ixNet getA [ixNet getA $ipPoolObj -prefixLength] -pattern]
+            SetMultiValues $ipPoolObj "-prefixLength" $ipPattern $pLen
+            #ixNet setA [ixNet getA $ipPoolObj -prefixLength]/singleValue -value $pLen
+            ixNet commit
             if { $step != "" } {
                 set stepvalue [GetIpV46Step $type $pLen $step]
+                ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -step $stepvalue
+                ixNet commit
+            } else {
+                set stepvalue [GetIpV46Step $type $pLen 1]
                 ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -step $stepvalue
                 ixNet commit
             }
@@ -1170,7 +1216,7 @@ body BgpSession::advertise_route { args } {
         }
 	}
 	ixNet commit
-	ixNet exec applyOnTheFly  ::ixNet::OBJ-/globals/topology
+	#ixNet exec applyOnTheFly  ::ixNet::OBJ-/globals/topology
 	return [GetStandardReturnHeader]
 
 }
@@ -1253,7 +1299,7 @@ body BgpSession::withdraw_route { args } {
         }
 	}
 	ixNet commit
-	ixNet exec applyOnTheFly  ::ixNet::OBJ-/globals/topology
+	#ixNet exec applyOnTheFly  ::ixNet::OBJ-/globals/topology
 	return [GetStandardReturnHeader]
 
 }
@@ -1449,6 +1495,7 @@ body SimRoute::config { args } {
                 ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -start $start -direction increment
                 ixNet commit
             }
+
             if { $prefix_len != "" } {
                 if {$type == "ipv4"} {
                     if {[string first "." $prefix_len] != -1} {
@@ -1459,14 +1506,24 @@ body SimRoute::config { args } {
                 } else {
                     set pLen $prefix_len
                 }
-                #not accepting 255.255.255.0 for prefix_len, but taking integer value
-                set ipPattern [ixNet getA [ixNet getA $ipPoolObj -prefixLength] -pattern]
-			    SetMultiValues $ipPoolObj "-prefixLength" $ipPattern $pLen
-                #ixNet setA [ixNet getA $ipPoolObj -prefixLength]/singleValue -value $pLen
-                ixNet commit
+            } else {
+                if {$type == "ipv4"} {
+                    set pLen 24
+                } else {
+                    set pLen 64
+                }
             }
+            #not accepting 255.255.255.0 for prefix_len, but taking integer value
+            set ipPattern [ixNet getA [ixNet getA $ipPoolObj -prefixLength] -pattern]
+            SetMultiValues $ipPoolObj "-prefixLength" $ipPattern $pLen
+            #ixNet setA [ixNet getA $ipPoolObj -prefixLength]/singleValue -value $pLen
+            ixNet commit
             if { $step != "" } {
                 set stepvalue [GetIpV46Step $type $pLen $step]
+                ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -step $stepvalue
+                ixNet commit
+            } else {
+                set stepvalue [GetIpV46Step $type $pLen 1]
                 ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -step $stepvalue
                 ixNet commit
             }
@@ -1892,7 +1949,7 @@ body Vpn::set_route { args } {
                 ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -start $start -direction increment
                 ixNet commit
             }
-			set pLen 24
+
             if { $prefix_len != "" } {
                 if {$type == "ipv4"} {
                     if {[string first "." $prefix_len] != -1} {
@@ -1903,17 +1960,26 @@ body Vpn::set_route { args } {
                 } else {
                     set pLen $prefix_len
                 }
-                set ipPattern [ixNet getA [ixNet getA $ipPoolObj -prefixLength] -pattern]
-			    SetMultiValues $ipPoolObj "-prefixLength" $ipPattern $pLen
-                #ixNet setA [ixNet getA $ipPoolObj -prefixLength]/singleValue -value $pLen
-                ixNet commit
+            } else {
+                if {$type == "ipv4"} {
+                    set pLen 24
+                } else {
+                    set pLen 64
+                }
             }
+            set ipPattern [ixNet getA [ixNet getA $ipPoolObj -prefixLength] -pattern]
+            SetMultiValues $ipPoolObj "-prefixLength" $ipPattern $pLen
+            #ixNet setA [ixNet getA $ipPoolObj -prefixLength]/singleValue -value $pLen
+            ixNet commit
             if { $step != "" } {
                 set stepvalue [GetIpV46Step $type $pLen $step]
                 ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -step $stepvalue
                 ixNet commit
+            } else {
+                set stepvalue [GetIpV46Step $type $pLen 1]
+                ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -step $stepvalue
+                ixNet commit
             }
- 	   
 	        set bgpVpnRouteObj ""
             set bgpV6VpnRouteObj ""
             if {[llength [ixNet getL $ipPoolObj bgpV6L3VpnRouteProperty]] != 0} {

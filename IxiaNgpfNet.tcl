@@ -460,7 +460,6 @@ proc GetValidNgpfHandleObj { objType handle { parentHnd "" } } {
 	} err ] } {
 		set index 0
 	}
-	
 	switch -exact $objType {
 		port {
         Deputs "check port: checkname $handle"
@@ -534,39 +533,43 @@ proc GetValidNgpfHandleObj { objType handle { parentHnd "" } } {
 		    set topoObjList [ixNet getL [ixNet getRoot] topology]
             if { [ llength $topoObjList ] != 0 } {
                 foreach topoObj $topoObjList {
-                    set deviceGroupList [ixNet getL $topoObj deviceGroup]
-                    foreach deviceObj $deviceGroupList {
-                        set ethernetObjList [ixNet getL $deviceObj ethernet]
-                        foreach ethernetObj $ethernetObjList {
-                            set ipv4ObjList [ixNet getL $ethernetObj ipv4]
-                            set ipv6ObjList [ixNet getL $ethernetObj ipv6]
-                            if { [ llength $ipv4ObjList ] != 0 } {
-                                foreach ipv4Obj $ipv4ObjList {
-                                    set bgpObj [ixNet getL $ipv4Obj bgpIpv4Peer]
-                                    if { $bgpObj == $handle } {
-                                        return $handle
+                    set vportObj [ixNet getA $topoObj -vports]
+                    if {$vportObj == $parentHnd} {
+                        set deviceGroupList [ixNet getL $topoObj deviceGroup]
+                        foreach deviceObj $deviceGroupList {
+                            set ethernetObjList [ixNet getL $deviceObj ethernet]
+                            foreach ethernetObj $ethernetObjList {
+                                set ipv4ObjList [ixNet getL $ethernetObj ipv4]
+                                set ipv6ObjList [ixNet getL $ethernetObj ipv6]
+                                if { [ llength $ipv4ObjList ] != 0 } {
+                                    foreach ipv4Obj $ipv4ObjList {
+                                        set bgpObj [ixNet getL $ipv4Obj bgpIpv4Peer]
+                                        if { $bgpObj != "" } {
+                                            return $bgpObj
+                                        }
+                                        #if {[ixNet getA [ixNet getA $router -interfaces] -description] == $handle} {
+                                        #    return $router
+                                        #}
                                     }
-                                    #if {[ixNet getA [ixNet getA $router -interfaces] -description] == $handle} {
-                                    #    return $router
-                                    #}
                                 }
-                            }
-                            if { [ llength $ipv6ObjList ] != 0 } {
-                                foreach ipv6Obj $ipv6ObjList {
-                                    set bgpObj [ixNet getL $ipv6Obj bgpIpv6Peer]
-                                    if { $bgpObj == $handle } {
-                                        return $handle
+                                if { [ llength $ipv6ObjList ] != 0 } {
+                                    foreach ipv6Obj $ipv6ObjList {
+                                        set bgpObj [ixNet getL $ipv6Obj bgpIpv6Peer]
+                                        if { $bgpObj != ""} {
+                                            return $bgpObj
+                                        }
+                                        #if {[ixNet getA [ixNet getA $router -interfaces] -description] == $handle} {
+                                        #    return $router
+                                        #}
                                     }
-                                    #if {[ixNet getA [ixNet getA $router -interfaces] -description] == $handle} {
-                                    #    return $router
-                                    #}
                                 }
                             }
                         }
                     }
                 }
+            } else {
+                return ""
             }
-            return ""
 		}
         simroute {
             set routers [ixNet getL $parentHnd networkGroup]
