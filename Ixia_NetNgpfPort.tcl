@@ -600,7 +600,8 @@ body Port::Connect { location { medium NULL } { checkLink 0 } { force 0 } } {
         # if {[ixNet getA $vport -type] == "ethernet" } {
             # ixNet setA $vport/l1Config/ethernet -media $medium
         # }
-        ixNet setA $handle/l1Config/[ixNet getA $handle -type] -media $medium
+        set cardType [ixNet getA $handle/l1Config -currentType]
+        ixNet setA $handle/l1Config/$cardType -media $medium
        
 		
 	}
@@ -1479,12 +1480,16 @@ body Port::config { args } {
     }
     
     if { [ info exists media ] } {
+
         if {[ixNet getA $handle -type] == "ethernet" } {
             ixNet setA $handle/l1Config/[ixNet getA $handle -type] -media $media
             Deputs "media type changed to $media"
             ixNet commit
+        } else {
+            set cardType [ixNet getA $handle/l1Config -currentType]
+            ixNet setA $handle/l1Config/$cardType -media $media
+            ixNet commit
         }
-        
     }
     
     if { [ info exists auto_neg ] } {
@@ -1493,8 +1498,9 @@ body Port::config { args } {
         } else {
             set auto_neg False
         }
+        set cardType [ixNet getA $handle/l1Config -currentType]
 		catch {
-			ixNet setA $handle/l1Config/[ixNet getA $handle -type]  -autoNegotiate $auto_neg 
+			ixNet setA $handle/l1Config/$cardType  -autoNegotiate $auto_neg
             Deputs "autoneg option changed to $auto_neg"
 			ixNet commit
 		}
@@ -1502,15 +1508,17 @@ body Port::config { args } {
     
     if { [ info exists flow_control ] } {
         Deputs "flow_control:$flow_control"
-		ixNet setA $handle/l1Config/[ixNet getA $handle -type] -enabledFlowControl $flow_control
+        set cardType [ixNet getA $handle/l1Config -currentType]
+		ixNet setA $handle/l1Config/$cardType -enabledFlowControl $flow_control
         Deputs "flowcontrol option changed to $flow_control"
 		ixNet commit
     }
 	if { [ info exists sig_end ] } {
+		set cardType [ixNet getA $handle/l1Config -currentType]
 		if { $sig_end } {
-			ixNet setA $handle/l1Config/[ixNet getA $handle -type] -autoInstrumentation endOfFrame
+			ixNet setA $handle/l1Config/$cardType -autoInstrumentation endOfFrame
 		} else {
-			ixNet setA $handle/l1Config/[ixNet getA $handle -type] -autoInstrumentation floating			
+			ixNet setA $handle/l1Config/$cardType -autoInstrumentation floating
 		}
 		#ixNet commit
 	}

@@ -161,33 +161,43 @@ Deputs "Args:$args "
 	ixNet setM $handle -enabled True
 	
 	if { [ info exists router_id ] } {
-Deputs "router_id:$router_id"	
-		ixNet setA $handle -localRouterID $router_id
-		ixNet commit
+Deputs "router_id:$router_id"
+        set deviceGroup [GetDependentNgpfProtocolHandle $handle "deviceGroup"]
+        set routeObj [ixNet getL $deviceGroup routerData]
+        set ipPattern [ixNet getA [ixNet getA $routeObj -routerId] -pattern]
+        SetMultiValues $routeObj "-routerId" $ipPattern $router_id
 		Deputs "router_idpost:$router_id"
 	}	
 	if { [ info exists area_id ] } {
 	    
 	    set id_hex [IP2Hex $area_id]
 		set area_id [format %i 0x$id_hex]
-		
-		set valueObj [ ixNet getA $handle -areaId]
-		set value [ixNet setA $valueObj/singleValue -value $area_id]
-		ixNet commit
+
+		set ipPattern [ixNet getA [ixNet getA $handle -areaId] -pattern]
+        SetMultiValues $handle "-areaId" $ipPattern $area_id
+		#set valueObj [ ixNet getA $handle -areaId]
+		#set value [ixNet setA $valueObj/singleValue -value $area_id]
+		#ixNet commit
 		
 	}
 	if { [ info exists hello_interval ] } {
-		set valueObj [ ixNet getA $handle -helloInterval]
-		set value [ixNet setA $valueObj/singleValue -value $hello_interval]
-		ixNet commit
+		set ipPattern [ixNet getA [ixNet getA $handle -helloInterval] -pattern]
+        SetMultiValues $handle "-helloInterval" $ipPattern $hello_interval
+		#set valueObj [ ixNet getA $handle -helloInterval]
+		#set value [ixNet setA $valueObj/singleValue -value $hello_interval]
+		#ixNet commit
 	}
 	if { [ info exists if_cost ] } {
 		set version [GetOspfNgpfRouterHandle $handle 1]
 		if {$version == 2} {
-		  ixNet setA [ixNet getA $handle -metric]/singleValue -value $if_cost
-		ixNet commit
+		    set ipPattern [ixNet getA [ixNet getA $handle -metric] -pattern]
+            SetMultiValues $handle "-metric" $ipPattern $if_cost
+		  #ixNet setA [ixNet getA $handle -metric]/singleValue -value $if_cost
+		  #ixNet commit
 		} elseif {$version == 3} {
-          ixNet setA [ixNet getA $handle -linkMetric]/singleValue -value $if_cost
+            set ipPattern [ixNet getA [ixNet getA $handle -linkMetric] -pattern]
+            SetMultiValues $handle "-linkMetric" $ipPattern $if_cost
+          #ixNet setA [ixNet getA $handle -linkMetric]/singleValue -value $if_cost
 		}
 	}
 	
@@ -207,7 +217,9 @@ Deputs "router_id:$router_id"
 				set network_type pointtopoint
 			}
 		}
-        ixNet setA [ixNet getA $handle -networkType]/singleValue -value $network_type
+		set ipPattern [ixNet getA [ixNet getA $handle -networkType] -pattern]
+        SetMultiValues $handle "-networkType" $ipPattern $network_type
+        #ixNet setA [ixNet getA $handle -networkType]/singleValue -value $network_type
 		ixNet commit
 		
 	}
@@ -258,8 +270,10 @@ Deputs "router_id:$router_id"
 	}
 	
 	if { [ info exists dead_interval ] } {
-		ixNet setA [ixNet getA $handle -deadInterval]/singleValue -value $dead_interval
-		ixNet commit
+		set ipPattern [ixNet getA [ixNet getA $handle -deadInterval] -pattern]
+        SetMultiValues $handle "-deadInterval" $ipPattern $dead_interval
+		#ixNet setA [ixNet getA $handle -deadInterval]/singleValue -value $dead_interval
+		#ixNet commit
 	}
 	
 	# v3 
@@ -267,12 +281,16 @@ Deputs "router_id:$router_id"
 	if { [ info exists retransmit_interval ] } {
 		set ospfRtHandle [GetOspfNgpfRouterHandle $handle]
 		Deputs "ospfRtHandle:$ospfRtHandle"
-		ixNet setA [ixNet getA $ospfRtHandle -lsaRetransmitTime]/singleValue -value $retransmit_interval
-		ixNet commit
+		set ipPattern [ixNet getA [ixNet getA $ospfRtHandle -lsaRetransmitTime] -pattern]
+        SetMultiValues $ospfRtHandle "-lsaRetransmitTime" $ipPattern $retransmit_interval
+		#ixNet setA [ixNet getA $ospfRtHandle -lsaRetransmitTime]/singleValue -value $retransmit_interval
+		#ixNet commit
 	}
 	if { [ info exists priority ] } {
-	    ixNet setA [ixNet getA $handle -priority]/singleValue -value $priority
-		ixNet commit
+	    set ipPattern [ixNet getA [ixNet getA $handle -priority] -pattern]
+        SetMultiValues $handle "-priority" $ipPattern $priority
+	    #ixNet setA [ixNet getA $handle -priority]/singleValue -value $priority
+		#ixNet commit
 	}
     return [GetStandardReturnHeader]
 	
@@ -283,7 +301,9 @@ body OspfSession::advertise_topo {} {
 Deputs "----- TAG: $tag -----"
     set deviceGroupObj [$this cget -deviceHandle]
 	foreach route [ ixNet getL $deviceGroupObj networkGroup ] {
-	    ixNet setA [ixNet getA $route -enabled]/singleValue -value True
+	    set ipPattern [ixNet getA [ixNet getA $route -enabled] -pattern]
+        SetMultiValues $route "-enabled" $ipPattern True
+	    #ixNet setA [ixNet getA $route -enabled]/singleValue -value True
 	}
 
     ixNet commit
@@ -295,8 +315,9 @@ body OspfSession::withdraw_topo {} {
 Deputs "----- TAG: $tag -----"
     set deviceGroupObj [$this cget -deviceHandle]
     foreach route [ ixNet getL $deviceGroupObj networkGroup ] {
-	
-		ixNet setA [ixNet getA $route -enabled]/singleValue -value False
+	    set ipPattern [ixNet getA [ixNet getA $route -enabled] -pattern]
+        SetMultiValues $route "-enabled" $ipPattern False
+		#ixNet setA [ixNet getA $route -enabled]/singleValue -value False
 	}
 
 	ixNet commit
@@ -470,7 +491,7 @@ Deputs "----- TAG: $tag -----"
                             set ethernetObj [ixNet add $deviceGroupObj ethernet]
                             ixNet commit
                             set ipv4Obj [ixNet add $ethernetObj ipv4]
-
+                            ixNet commit
                         }
                     }
                 }
@@ -539,6 +560,7 @@ Deputs "----- TAG: $tag -----"
 		ixNet commit
 		set handle [ ixNet remapIds $ospfObj ]
 		ixNet setA $handle -name $this
+		ixNet commit
         Deputs "handleospf:$handle"
 		set protocol ospf
 		$this configure -deviceHandle $deviceGroupObj
@@ -1094,6 +1116,7 @@ Deputs "----- TAG: $tag -----"
                             set ethernetObj [ixNet add $deviceGroupObj ethernet]
                             ixNet commit
                             set ipv6Obj [ixNet add $ethernetObj ipv6]
+                            ixNet commit
                         }
                     }
                 }
@@ -1754,9 +1777,11 @@ Deputs "Args:$args "
 
     if { [ info exists ipv4PoolObj ] } {
         set ospfRouteObj [ixNet getL $ipv4PoolObj ospfRouteProperty]
+        set ipPoolObj $ipv4PoolObj
     }
     if { [ info exists ipv6PoolObj ] } {
         set ospfRouteObj [ixNet getL $ipv6PoolObj ospfv3RouteProperty]
+        set ipPoolObj $ipv6PoolObj
     }
 	if { [ info exists metric ] } {
 		ixNet setA [ixNet getA $ospfRouteObj -metric]/singleValue -value $metric
@@ -1784,47 +1809,41 @@ Deputs "num:$num start:$start step:$step prefix_len:$prefix_len"
         ixNet setA $handle -multiplier $num
         ixNet setA [ixNet getA $handle -enabled]/singleValue -value True
         ixNet commit
-        set pLen $prefix_len
-        if {$step !=""} {
-            set step $step
+        if { $prefix_len != "" } {
+            if {[string first "." $prefix_len] != -1} {
+                set pLen [SubnetToPrefixlenV4 $prefix_len]
+            } else {
+                set pLen $prefix_len
+            }
+            if {[string first "." $start] != -1} {
+                set type "ipv4"
+            } else {
+                set type "ipv6"
+            }
         } else {
-            set step 1
+            if {[string first "." $start] != -1} {
+                set pLen 24
+                set type "ipv4"
+            } else {
+                set pLen 64
+                set type "ipv6"
+            }
         }
-        if {[IsIPv6Address $start]} {
-			ixNet setM [ixNet getA $ipv6PoolObj -networkAddress]/counter -start $start -direction increment
-			ixNet setA [ixNet getA $ipv6PoolObj -prefixLength]/singleValue -value $pLen
-            if {$pLen == 16} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 0 0 $step]
-            } elseif  {$pLen == 32} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 2 2 $step]
-            } elseif  {$pLen == 48} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 4 4 $step]
-            } elseif  {$pLen == 64} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 6 6 $step]
-            } elseif  {$pLen == 80} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 8 8 $step]
-            } elseif  {$pLen == 96} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 10 10 $step]
-            } elseif  {$pLen == 112} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 12 12 $step]
-            } else {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 14 14 $step]
-            }
-            ixNet setA [ixNet getA $ipv6PoolObj -networkAddress]/counter -step $stepvalue
-		} else {
-			ixNet setM [ixNet getA $ipv4PoolObj -networkAddress]/counter -start $start -direction increment
-			ixNet setA [ixNet getA $ipv4PoolObj -prefixLength]/singleValue -value $pLen
-            if {$pLen == 8} {
-                set stepvalue [string replace "0.0.0.0" 0 0 $step]
-            } elseif  {$pLen == 16} {
-                set stepvalue [string replace "0.0.0.0" 2 2 $step]
-            } elseif  {$pLen == 24} {
-                set stepvalue [string replace "0.0.0.0" 4 4 $step]
-            } else {
-                set stepvalue [string replace "0.0.0.0" 6 6 $step]
-            }
-            ixNet setA [ixNet getA $ipv4PoolObj -networkAddress]/counter -step $stepvalue
-		}
+        #not accepting 255.255.255.0 for prefix_len, but taking integer value
+        set ipPattern [ixNet getA [ixNet getA $ipPoolObj -prefixLength] -pattern]
+        SetMultiValues $ipPoolObj "-prefixLength" $ipPattern $pLen
+        #ixNet setA [ixNet getA $ipPoolObj -prefixLength]/singleValue -value $pLen
+        ixNet commit
+
+        if { $step != "" } {
+            set stepvalue [GetIpV46Step $type $pLen $step]
+            ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -step $stepvalue
+            ixNet commit
+        } else {
+            set stepvalue [GetIpV46Step $type $pLen 1]
+            ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -step $stepvalue
+            ixNet commit
+        }
 		ixNet commit
 		
 		$rb configure -handle $handle
@@ -1984,16 +2003,19 @@ Deputs "Args:$args "
     }
 	if { [ info exists ipv4PoolObj ] } {
         set ospfRouteObj [ixNet getL $ipv4PoolObj ospfRouteProperty]
+        set ipv4PoolObj [ ixNet remapIds $ipv4PoolObj ]
+        set ipPoolObj $ipv4PoolObj
     }
     if { [ info exists ipv6PoolObj ] } {
         set ospfRouteObj [ixNet getL $ipv6PoolObj ospfv3RouteProperty]
+        set ipv6PoolObj [ ixNet remapIds $ipv6PoolObj ]
+        set ipPoolObj $ipv6PoolObj
     }
 	if { [ info exists metric ] } {
 		ixNet setA [ixNet getA $ospfRouteObj -metric]/singleValue -value $metric
 	    ixNet commit
 	}
-
-	if { [ info exists route_block ] } {
+    if { [ info exists route_block ] } {
 	
 		set rb [ GetObject $route_block ]
 		$route_block configure -handle $handle
@@ -2012,48 +2034,41 @@ Deputs "Args:$args "
 		ixNet setA $handle -multiplier $num
         ixNet setA [ixNet getA $handle -enabled]/singleValue -value True
         ixNet commit
-        set pLen $prefix_len
-        if {$step !=""} {
-            set step $step
+        if { $prefix_len != "" } {
+            if {[string first "." $prefix_len] != -1} {
+                set pLen [SubnetToPrefixlenV4 $prefix_len]
+            } else {
+                set pLen $prefix_len
+            }
+            if {[string first "." $start] != -1} {
+                set type "ipv4"
+            } else {
+                set type "ipv6"
+            }
         } else {
-            set step 1
+            if {[string first "." $start] != -1} {
+                set pLen 24
+                set type "ipv4"
+            } else {
+                set pLen 64
+                set type "ipv6"
+            }
         }
-        if {[IsIPv6Address $start]} {
-			ixNet setM [ixNet getA $ipv6PoolObj -networkAddress]/counter -start $start -direction increment
-			ixNet setA [ixNet getA $ipv6PoolObj -prefixLength]/singleValue -value $pLen
-            if {$pLen == 16} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 0 0 $step]
-            } elseif  {$pLen == 32} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 2 2 $step]
-            } elseif  {$pLen == 48} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 4 4 $step]
-            } elseif  {$pLen == 64} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 6 6 $step]
-            } elseif  {$pLen == 80} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 8 8 $step]
-            } elseif  {$pLen == 96} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 10 10 $step]
-            } elseif  {$pLen == 112} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 12 12 $step]
-            } else {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 14 14 $step]
-            }
-            ixNet setA [ixNet getA $ipv6PoolObj -networkAddress]/counter -step $stepvalue
-		} else {
-			ixNet setM [ixNet getA $ipv4PoolObj -networkAddress]/counter -start $start -direction increment
-			ixNet setA [ixNet getA $ipv4PoolObj -prefixLength]/singleValue -value $pLen
-            if {$pLen == 8} {
-                set stepvalue [string replace "0.0.0.0" 0 0 $step]
-            } elseif  {$pLen == 16} {
-                set stepvalue [string replace "0.0.0.0" 2 2 $step]
-            } elseif  {$pLen == 24} {
-                set stepvalue [string replace "0.0.0.0" 4 4 $step]
-            } else {
-                set stepvalue [string replace "0.0.0.0" 6 6 $step]
-            }
-            ixNet setA [ixNet getA $ipv4PoolObj -networkAddress]/counter -step $stepvalue
-		}
-		ixNet commit
+        #not accepting 255.255.255.0 for prefix_len, but taking integer value
+        set ipPattern [ixNet getA [ixNet getA $ipPoolObj -prefixLength] -pattern]
+        SetMultiValues $ipPoolObj "-prefixLength" $ipPattern $pLen
+        #ixNet setA [ixNet getA $ipPoolObj -prefixLength]/singleValue -value $pLen
+        ixNet commit
+
+        if { $step != "" } {
+            set stepvalue [GetIpV46Step $type $pLen $step]
+            ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -step $stepvalue
+            ixNet commit
+        } else {
+            set stepvalue [GetIpV46Step $type $pLen 1]
+            ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -step $stepvalue
+            ixNet commit
+        }
 		
 	} else {
 	
@@ -2243,9 +2258,11 @@ Deputs "Args:$args "
     }
 	if { [ info exists ipv4PoolObj ] } {
         set ospfRouteObj [ixNet getL $ipv4PoolObj ospfRouteProperty]
+        set ipPoolObj $ipv4PoolObj
     }
     if { [ info exists ipv6PoolObj ] } {
         set ospfRouteObj [ixNet getL $ipv6PoolObj ospfv3RouteProperty]
+        set ipPoolObj $ipv6PoolObj
     }
 	if { [ info exists metric ] } {
 		ixNet setA [ixNet getA $ospfRouteObj -metric]/singleValue -value $metric
@@ -2271,48 +2288,42 @@ Deputs "Args:$args "
 		ixNet setA $handle -multiplier $num
         ixNet setA [ixNet getA $handle -enabled]/singleValue -value True
         ixNet commit
-        set pLen $prefix_len
-        if {$step !=""} {
-            set step $step
+        if { $prefix_len != "" } {
+            if {[string first "." $prefix_len] != -1} {
+                set pLen [SubnetToPrefixlenV4 $prefix_len]
+            } else {
+                set pLen $prefix_len
+            }
+            if {[string first "." $start] != -1} {
+                set type "ipv4"
+            } else {
+                set type "ipv6"
+            }
         } else {
-            set step 1
+            if {[string first "." $start] != -1} {
+                set pLen 24
+                set type "ipv4"
+            } else {
+                set pLen 64
+                set type "ipv6"
+            }
         }
-        if {[IsIPv6Address $start]} {
-			ixNet setM [ixNet getA $ipv6PoolObj -networkAddress]/counter -start $start -direction increment
-			ixNet setA [ixNet getA $ipv6PoolObj -prefixLength]/singleValue -value $pLen
-            if {$pLen == 16} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 0 0 $step]
-            } elseif  {$pLen == 32} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 2 2 $step]
-            } elseif  {$pLen == 48} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 4 4 $step]
-            } elseif  {$pLen == 64} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 6 6 $step]
-            } elseif  {$pLen == 80} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 8 8 $step]
-            } elseif  {$pLen == 96} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 10 10 $step]
-            } elseif  {$pLen == 112} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 12 12 $step]
-            } else {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 14 14 $step]
-            }
-            ixNet setA [ixNet getA $ipv6PoolObj -networkAddress]/counter -step $stepvalue
-		} else {
-			ixNet setM [ixNet getA $ipv4PoolObj -networkAddress]/counter -start $start -direction increment
-			ixNet setA [ixNet getA $ipv4PoolObj -prefixLength]/singleValue -value $pLen
-            if {$pLen == 8} {
-                set stepvalue [string replace "0.0.0.0" 0 0 $step]
-            } elseif  {$pLen == 16} {
-                set stepvalue [string replace "0.0.0.0" 2 2 $step]
-            } elseif  {$pLen == 24} {
-                set stepvalue [string replace "0.0.0.0" 4 4 $step]
-            } else {
-                set stepvalue [string replace "0.0.0.0" 6 6 $step]
-            }
-            ixNet setA [ixNet getA $ipv4PoolObj -networkAddress]/counter -step $stepvalue
-		}
-		ixNet commit
+        #not accepting 255.255.255.0 for prefix_len, but taking integer value
+        set ipPattern [ixNet getA [ixNet getA $ipPoolObj -prefixLength] -pattern]
+        SetMultiValues $ipPoolObj "-prefixLength" $ipPattern $pLen
+        #ixNet setA [ixNet getA $ipPoolObj -prefixLength]/singleValue -value $pLen
+        ixNet commit
+
+        if { $step != "" } {
+            set stepvalue [GetIpV46Step $type $pLen $step]
+            ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -step $stepvalue
+            ixNet commit
+        } else {
+            set stepvalue [GetIpV46Step $type $pLen 1]
+            ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -step $stepvalue
+            ixNet commit
+        }
+
         ixNet setA [ixNet getA $ospfRouteObj -routeOrigin]/singleValue -value nssa
         ixNet commit
 		
@@ -2411,9 +2422,11 @@ Deputs "Args:$args "
 	
 	if { [ info exists ipv4PoolObj ] } {
         set ospfRouteObj [ixNet getL $ipv4PoolObj ospfRouteProperty]
+        set ipPoolObj $ipv4PoolObj
     }
     if { [ info exists ipv6PoolObj ] } {
         set ospfRouteObj [ixNet getL $ipv6PoolObj ospfv3RouteProperty]
+        set ipPoolObj $ipv6PoolObj
     }
 	if { [ info exists metric ] } {
 		ixNet setA [ixNet getA $ospfRouteObj -metric]/singleValue -value $metric
@@ -2439,48 +2452,42 @@ Deputs "Args:$args "
 		ixNet setA $handle -multiplier $num
         ixNet setA [ixNet getA $handle -enabled]/singleValue -value True
         ixNet commit
-        set pLen $prefix_len
-        if {$step !=""} {
-            set step $step
+        if { $prefix_len != "" } {
+            if {[string first "." $prefix_len] != -1} {
+                set pLen [SubnetToPrefixlenV4 $prefix_len]
+            } else {
+                set pLen $prefix_len
+            }
+            if {[string first "." $start] != -1} {
+                set type "ipv4"
+            } else {
+                set type "ipv6"
+            }
         } else {
-            set step 1
+            if {[string first "." $start] != -1} {
+                set pLen 24
+                set type "ipv4"
+            } else {
+                set pLen 64
+                set type "ipv6"
+            }
         }
-        if {[IsIPv6Address $start]} {
-			ixNet setM [ixNet getA $ipv6PoolObj -networkAddress]/counter -start $start -direction increment
-			ixNet setA [ixNet getA $ipv6PoolObj -prefixLength]/singleValue -value $pLen
-            if {$pLen == 16} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 0 0 $step]
-            } elseif  {$pLen == 32} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 2 2 $step]
-            } elseif  {$pLen == 48} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 4 4 $step]
-            } elseif  {$pLen == 64} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 6 6 $step]
-            } elseif  {$pLen == 80} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 8 8 $step]
-            } elseif  {$pLen == 96} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 10 10 $step]
-            } elseif  {$pLen == 112} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 12 12 $step]
-            } else {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 14 14 $step]
-            }
-            ixNet setA [ixNet getA $ipv6PoolObj -networkAddress]/counter -step $stepvalue
-		} else {
-			ixNet setM [ixNet getA $ipv4PoolObj -networkAddress]/counter -start $start -direction increment
-			ixNet setA [ixNet getA $ipv4PoolObj -prefixLength]/singleValue -value $pLen
-            if {$pLen == 8} {
-                set stepvalue [string replace "0.0.0.0" 0 0 $step]
-            } elseif  {$pLen == 16} {
-                set stepvalue [string replace "0.0.0.0" 2 2 $step]
-            } elseif  {$pLen == 24} {
-                set stepvalue [string replace "0.0.0.0" 4 4 $step]
-            } else {
-                set stepvalue [string replace "0.0.0.0" 6 6 $step]
-            }
-            ixNet setA [ixNet getA $ipv4PoolObj -networkAddress]/counter -step $stepvalue
-		}
-		ixNet commit
+        #not accepting 255.255.255.0 for prefix_len, but taking integer value
+        set ipPattern [ixNet getA [ixNet getA $ipPoolObj -prefixLength] -pattern]
+        SetMultiValues $ipPoolObj "-prefixLength" $ipPattern $pLen
+        #ixNet setA [ixNet getA $ipPoolObj -prefixLength]/singleValue -value $pLen
+        ixNet commit
+
+        if { $step != "" } {
+            set stepvalue [GetIpV46Step $type $pLen $step]
+            ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -step $stepvalue
+            ixNet commit
+        } else {
+            set stepvalue [GetIpV46Step $type $pLen 1]
+            ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -step $stepvalue
+            ixNet commit
+        }
+
         ixNet setA [ixNet getA $ospfRouteObj -routeOrigin]/singleValue -value externaltype1
         ixNet commit
 		
@@ -2581,9 +2588,11 @@ Deputs "Args:$args "
 	
 	if { [ info exists ipv4PoolObj ] } {
         set ospfRouteObj [ixNet getL $ipv4PoolObj ospfRouteProperty]
+        set ipPoolObj $ipv4PoolObj
     }
     if { [ info exists ipv6PoolObj ] } {
         set ospfRouteObj [ixNet getL $ipv6PoolObj ospfv3RouteProperty]
+        set ipPoolObj $ipv6PoolObj
     }
 	if { [ info exists metric ] } {
 		ixNet setA [ixNet getA $ospfRouteObj -metric]/singleValue -value $metric
@@ -2608,47 +2617,41 @@ Deputs "Args:$args "
 		ixNet setA $handle -multiplier $num
         ixNet setA [ixNet getA $handle -enabled]/singleValue -value True
         ixNet commit
-        set pLen $prefix_len
-        if {$step !=""} {
-            set step $step
+        if { $prefix_len != "" } {
+            if {[string first "." $prefix_len] != -1} {
+                set pLen [SubnetToPrefixlenV4 $prefix_len]
+            } else {
+                set pLen $prefix_len
+            }
+            if {[string first "." $start] != -1} {
+                set type "ipv4"
+            } else {
+                set type "ipv6"
+            }
         } else {
-            set step 1
+            if {[string first "." $start] != -1} {
+                set pLen 24
+                set type "ipv4"
+            } else {
+                set pLen 64
+                set type "ipv6"
+            }
         }
-        if {[IsIPv6Address $start]} {
-			ixNet setM [ixNet getA $ipv6PoolObj -networkAddress]/counter -start $start -direction increment
-			ixNet setA [ixNet getA $ipv6PoolObj -prefixLength]/singleValue -value $pLen
-            if {$pLen == 16} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 0 0 $step]
-            } elseif  {$pLen == 32} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 2 2 $step]
-            } elseif  {$pLen == 48} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 4 4 $step]
-            } elseif  {$pLen == 64} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 6 6 $step]
-            } elseif  {$pLen == 80} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 8 8 $step]
-            } elseif  {$pLen == 96} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 10 10 $step]
-            } elseif  {$pLen == 112} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 12 12 $step]
-            } else {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 14 14 $step]
-            }
-            ixNet setA [ixNet getA $ipv6PoolObj -networkAddress]/counter -step $stepvalue
-		} else {
-			ixNet setM [ixNet getA $ipv4PoolObj -networkAddress]/counter -start $start -direction increment
-			ixNet setA [ixNet getA $ipv4PoolObj -prefixLength]/singleValue -value $pLen
-            if {$pLen == 8} {
-                set stepvalue [string replace "0.0.0.0" 0 0 $step]
-            } elseif  {$pLen == 16} {
-                set stepvalue [string replace "0.0.0.0" 2 2 $step]
-            } elseif  {$pLen == 24} {
-                set stepvalue [string replace "0.0.0.0" 4 4 $step]
-            } else {
-                set stepvalue [string replace "0.0.0.0" 6 6 $step]
-            }
-            ixNet setA [ixNet getA $ipv4PoolObj -networkAddress]/counter -step $stepvalue
-		}
+        #not accepting 255.255.255.0 for prefix_len, but taking integer value
+        set ipPattern [ixNet getA [ixNet getA $ipPoolObj -prefixLength] -pattern]
+        SetMultiValues $ipPoolObj "-prefixLength" $ipPattern $pLen
+        #ixNet setA [ixNet getA $ipPoolObj -prefixLength]/singleValue -value $pLen
+        ixNet commit
+
+        if { $step != "" } {
+            set stepvalue [GetIpV46Step $type $pLen $step]
+            ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -step $stepvalue
+            ixNet commit
+        } else {
+            set stepvalue [GetIpV46Step $type $pLen 1]
+            ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -step $stepvalue
+            ixNet commit
+        }
 		ixNet commit
 		
 	} else {
@@ -2746,9 +2749,11 @@ Deputs "Args:$args "
 	
 	if { [ info exists ipv4PoolObj ] } {
         set ospfRouteObj [ixNet getL $ipv4PoolObj ospfRouteProperty]
+        set ipPoolObj $ipv4PoolObj
     }
     if { [ info exists ipv6PoolObj ] } {
         set ospfRouteObj [ixNet getL $ipv6PoolObj ospfv3RouteProperty]
+        set ipPoolObj $ipv6PoolObj
     }
 	if { [ info exists metric ] } {
 		ixNet setA [ixNet getA $ospfRouteObj -metric]/singleValue -value $metric
@@ -2774,48 +2779,41 @@ Deputs "Args:$args "
 		ixNet setA $handle -multiplier $num
         ixNet setA [ixNet getA $handle -enabled]/singleValue -value True
         ixNet commit
-        set pLen $prefix_len
-        if {$step !=""} {
-            set step $step
+        if { $prefix_len != "" } {
+            if {[string first "." $prefix_len] != -1} {
+                set pLen [SubnetToPrefixlenV4 $prefix_len]
+            } else {
+                set pLen $prefix_len
+            }
+            if {[string first "." $start] != -1} {
+                set type "ipv4"
+            } else {
+                set type "ipv6"
+            }
         } else {
-            set step 1
+            if {[string first "." $start] != -1} {
+                set pLen 24
+                set type "ipv4"
+            } else {
+                set pLen 64
+                set type "ipv6"
+            }
         }
-        if {[IsIPv6Address $start]} {
-			ixNet setM [ixNet getA $ipv6PoolObj -networkAddress]/counter -start $start -direction increment
-			ixNet setA [ixNet getA $ipv6PoolObj -prefixLength]/singleValue -value $pLen
-            if {$pLen == 16} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 0 0 $step]
-            } elseif  {$pLen == 32} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 2 2 $step]
-            } elseif  {$pLen == 48} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 4 4 $step]
-            } elseif  {$pLen == 64} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 6 6 $step]
-            } elseif  {$pLen == 80} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 8 8 $step]
-            } elseif  {$pLen == 96} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 10 10 $step]
-            } elseif  {$pLen == 112} {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 12 12 $step]
-            } else {
-                set stepvalue [string replace "0:0:0:0:0:0:0:0" 14 14 $step]
-            }
-            ixNet setA [ixNet getA $ipv6PoolObj -networkAddress]/counter -step $stepvalue
-		} else {
-			ixNet setM [ixNet getA $ipv4PoolObj -networkAddress]/counter -start $start -direction increment
-			ixNet setA [ixNet getA $ipv4PoolObj -prefixLength]/singleValue -value $pLen
-            if {$pLen == 8} {
-                set stepvalue [string replace "0.0.0.0" 0 0 $step]
-            } elseif  {$pLen == 16} {
-                set stepvalue [string replace "0.0.0.0" 2 2 $step]
-            } elseif  {$pLen == 24} {
-                set stepvalue [string replace "0.0.0.0" 4 4 $step]
-            } else {
-                set stepvalue [string replace "0.0.0.0" 6 6 $step]
-            }
-            ixNet setA [ixNet getA $ipv4PoolObj -networkAddress]/counter -step $stepvalue
-		}
-		ixNet commit
+        #not accepting 255.255.255.0 for prefix_len, but taking integer value
+        set ipPattern [ixNet getA [ixNet getA $ipPoolObj -prefixLength] -pattern]
+        SetMultiValues $ipPoolObj "-prefixLength" $ipPattern $pLen
+        #ixNet setA [ixNet getA $ipPoolObj -prefixLength]/singleValue -value $pLen
+        ixNet commit
+
+        if { $step != "" } {
+            set stepvalue [GetIpV46Step $type $pLen $step]
+            ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -step $stepvalue
+            ixNet commit
+        } else {
+            set stepvalue [GetIpV46Step $type $pLen 1]
+            ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -step $stepvalue
+            ixNet commit
+        }
         ixNet setA [ixNet getA $ospfRouteObj -routeOrigin]/singleValue -value samearea
         ixNet commit
 		

@@ -147,12 +147,6 @@ body PppoeHost::reborn { { onStack null } } {
                 set vportObj [ixNet getA $topoObj -vports]
 				foreach vport $vportList {
 					if {$vportObj != $vport && $vport == $hPort} {	
-                        # set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
-						# set deviceGroupObj [ixNet add $topoObj deviceGroup]
-						# set deviceGroupObj [ ixNet remapIds $deviceGroupObj ]
-						# set sg_ethernet [ixNet add $deviceGroupObj ethernet]
-						# ixNet commit
-						# set sg_ethernet [lindex [ixNet remapIds $sg_ethernet] 0]
                         set sg_ethernet [CreateProtoHandleFromRoot $hPort]
 						set stack $sg_ethernet	
 						set flag 0
@@ -205,7 +199,7 @@ body PppoeHost::reborn { { onStack null } } {
 		set handle $sg_pppoxEndpoint
 	}
 	
-    #ixNet setA $sg_pppoxEndpoint -name $this
+    ixNet setA $sg_pppoxEndpoint -name $this
     ixNet commit
 }
 	

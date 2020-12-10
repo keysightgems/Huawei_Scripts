@@ -180,6 +180,8 @@ class LdpSession {
                     }
                 } 
             }
+            ixNet setA $ldpObj -name $this
+            ixNet commit
         }	
 		
 

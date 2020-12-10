@@ -605,32 +605,29 @@ body SimulatedRoute::config { args } {
                 ixNet setA $networkGroupObj -multiplier $num
                 ixNet setA [ixNet getA $networkGroupObj -enabled]/singleValue -value True
                 ixNet commit
-                set pLen $prefix_len
-                if {$step !=""} {
-                    set step $step
-                } else {
-                    set step 1
-                }
-                
+
                 set ipv6PoolObj ""
                 set ipv4PoolObj ""
-                if {[IsIPv6Address $start]} {
-
+                if {[string first ":" $start] != -1} {
                     set ipv6PoolObj [ixNet getL $networkGroupObj ipv6PrefixPools]
                     if {[llength $ipv6PoolObj] == 0} {
                         set ipv6PoolObj [ixNet add $networkGroupObj "ipv6PrefixPools"]
                         ixNet commit
+                        set ipv6PoolObj [ ixNet remapIds $ipv6PoolObj ]
                     }
+                    set ipPoolObj $ipv6PoolObj
                     set connector [ixNet add $ipv6PoolObj connector]
                     ixNet setA $connector -connectedTo $isisHandle
                     ixNet commit
                 }
-                if {[IsIPv4Address $start]} {
+                if {[string first "." $start] != -1} {
                     set ipv4PoolObj [ixNet getL $networkGroupObj "ipv4PrefixPools"]
                     if {[llength $ipv4PoolObj] == 0} {
                         set ipv4PoolObj [ixNet add $networkGroupObj "ipv4PrefixPools"]
                         ixNet commit
+                        set ipv4PoolObj [ ixNet remapIds $ipv4PoolObj ]
                     }
+                    set ipPoolObj $ipv4PoolObj
                     set connector [ixNet add $ipv4PoolObj connector]
                     ixNet setA $connector -connectedTo $isisHandle
                     ixNet commit
@@ -646,44 +643,50 @@ body SimulatedRoute::config { args } {
                         ixNet setA [ixNet getA $isisRoutePropObj -metric]/singleValue -value $metric
                     }
                 }
-
-                set handle $networkGroupObj
-                if {[IsIPv6Address $start]} {
+                if {[string first ":" $start] != -1} {
                     ixNet setM [ixNet getA $ipv6PoolObj -networkAddress]/counter -start $start -direction increment
-                    ixNet setA [ixNet getA $ipv6PoolObj -prefixLength]/singleValue -value $pLen
-                    if {$pLen == 16} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 0 0 $step]
-                    } elseif  {$pLen == 32} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 2 2 $step]
-                    } elseif  {$pLen == 48} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 4 4 $step]
-                    } elseif  {$pLen == 64} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 6 6 $step]
-                    } elseif  {$pLen == 80} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 8 8 $step]
-                    } elseif  {$pLen == 96} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 10 10 $step]
-                    } elseif  {$pLen == 112} {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 12 12 $step]
-                    } else {
-                        set stepvalue [string replace "0:0:0:0:0:0:0:0" 14 14 $step]
-                    }
-                    ixNet setA [ixNet getA $ipv6PoolObj -networkAddress]/counter -step $stepvalue
+                    ixNet commit
                 }
-                if {[IsIPv4Address $start]} {
+                if {[string first "." $start] != -1} {
                     ixNet setM [ixNet getA $ipv4PoolObj -networkAddress]/counter -start $start -direction increment
-                    ixNet setA [ixNet getA $ipv4PoolObj -prefixLength]/singleValue -value $pLen
-                    if {$pLen == 8} {
-                        set stepvalue [string replace "0.0.0.0" 0 0 $step]
-                    } elseif  {$pLen == 16} {
-                        set stepvalue [string replace "0.0.0.0" 2 2 $step]
-                    } elseif  {$pLen == 24} {
-                        set stepvalue [string replace "0.0.0.0" 4 4 $step]
-                    } else {
-                        set stepvalue [string replace "0.0.0.0" 6 6 $step]
-                    }
-                    ixNet setA [ixNet getA $ipv4PoolObj -networkAddress]/counter -step $stepvalue
+                    ixNet commit
                 }
+                if { $prefix_len != "" } {
+                    if {[string first "." $prefix_len] != -1} {
+                        set pLen [SubnetToPrefixlenV4 $prefix_len]
+                    } else {
+                        set pLen $prefix_len
+                    }
+                    if {[string first "." $start] != -1} {
+                        set type "ipv4"
+                    } else {
+                        set type "ipv6"
+                    }
+                } else {
+                    if {[string first "." $start] != -1} {
+                        set pLen 24
+                        set type "ipv4"
+                    } else {
+                        set pLen 64
+                        set type "ipv6"
+                    }
+                }
+                #not accepting 255.255.255.0 for prefix_len, but taking integer value
+                set ipPattern [ixNet getA [ixNet getA $ipPoolObj -prefixLength] -pattern]
+                SetMultiValues $ipPoolObj "-prefixLength" $ipPattern $pLen
+                #ixNet setA [ixNet getA $ipPoolObj -prefixLength]/singleValue -value $pLen
+                ixNet commit
+
+                if { $step != "" } {
+                    set stepvalue [GetIpV46Step $type $pLen $step]
+                    ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -step $stepvalue
+                    ixNet commit
+                } else {
+                    set stepvalue [GetIpV46Step $type $pLen 1]
+                    ixNet setM [ixNet getA $ipPoolObj -networkAddress]/counter -step $stepvalue
+                    ixNet commit
+                }
+                set handle $networkGroupObj
                 ixNet commit
                 
                 $rb configure -handle $handle
