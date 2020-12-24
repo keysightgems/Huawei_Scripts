@@ -341,149 +341,128 @@ body IgmpHost::config { args } {
             }
 		}
     }
-    
-    # set interfaces [ixNet getA $handle -interfaces]
-    # if {$interfaces == "" || [regexp -nocase "null" $interfaces]} {
-	#check if there is one host with the same ip
-        # if {[info exists ipaddr]} {
-        #     set interfaces [ ixNet getL $hPort interface ]
-        #     foreach int $interfaces {
-        #         set ipv4_hdl [ixNet getL $int ipv4]
-		# 		if {$ipv4_hdl != ""} {
-		# 			set ip_addr [ixNet getA $ipv4_hdl -ip]
-		# 			if {$ip_addr == $ipaddr} {
-		# 				set matched_int $int
-		# 				break
-		# 			}
-		# 		}
-        #     }
-        # }
-        # Deputs "check the value of igmpTrigger as $igmpTrigger"
-        if {[info exists igmpTrigger]} {
-            foreach { key value } $args {
-            set key [string tolower $key]
-            switch -exact -- $key {
-                -group {
-                ## Unused option, even in classic
-            	set groupList $value
-            	# set group $value
-                }
+
+    # Deputs "check the value of igmpTrigger as $igmpTrigger"
+    if {[info exists igmpTrigger]} {
+        foreach { key value } $args {
+        set key [string tolower $key]
+        switch -exact -- $key {
+            -group {
+            ## Unused option, even in classic
+            set groupList $value
+            # set group $value
             }
-		    foreach group $groupList {
-            Deputs Step10
-			if { [ $group isa MulticastGroup ] == 0 } {
-				return [ GetErrorReturnHeader "Invalid MultcastGroup object... $group" ]
-			}
-			set grpIndex [ lsearch $group_list $group ]
-			if { $grpIndex >= 0 } {
-                Deputs Step30
-				foreach hIgmp $handle {
-					set hGroup	$group_handle($group,$hIgmp)
-					ixNet setA $hGroup -enabled True
-					ixNet commit
-				}
-			} else {
-                Deputs Step40
-				set filter_mode [ $group cget -filter_mode ]
-				set group_ip [ $group cget -group_ip ]
-				set group_num [ $group cget -group_num ]
-				set group_step [ $group cget -group_step ]
-				set group_modbit [ $group cget -group_modbit ]
-				set source_ip [ $group cget -source_ip ]
-				set source_num [ $group cget -source_num ]
-				set source_step [ $group cget -source_step ]
-				set source_modbit [ $group cget -source_modbit ]
-                Deputs "=group prop= filter_mode:$filter_mode group_ip:$group_ip group_num:$group_num group_step:$group_step group_modbit:$group_modbit source_ip:$source_ip source_num:$source_num source_step:$source_step source_modbit:$source_modbit"
-                Deputs Step45
-                Deputs "handle:$handle"	
-				foreach hIgmp $handle {
-
-                    if {[regexp {(igmpHost)} $hIgmp igmp igmpHandle] != 0} {
-					    set hGroup [ ixNet getL $hIgmp igmpMcastIPv4GroupList]
-                        set hSource [ixNet getL $hGroup igmpUcastIPv4SourceList]
-
-                        if {[info exists source_step] && $source_step != ""} {
-                            if { [ IsIPv6Address $source_step ] } {
-                                set source_step "0.0.0.1"
-                            }
-                        }
-                    } elseif {[regexp {(mldHost)} $hIgmp mld mldHandle] != 0} {
-
-					    set hGroup [ ixNet getL $hIgmp mldMcastIPv6GroupList]
-                        set hSource [ixNet getL $hGroup mldUcastIPv6SourceList]
-
-                        if {[info exists source_ip] && $source_ip == "0.0.0.0"} {
-                            set source_ip "aaaa:0:0:0:0:0:0:0"
-                        }
-                        if {[info exists source_step] && $source_step != ""} {
-                            if { [ IsIPv4Address $source_step ] } {
-                                set source_step "0:0:0:0:0:0:0:1"
-                            }
-                        }
-
-                    } else {
-                        Deputs "didn't match with Igmp or Mld for handle $handle"
-                    }
-
-                    Deputs "group handle retrieved from igmp handle is $hGroup"
-                    # ixNet setM $hSource \
-                    #     -sourceRangeCount $source_num \
-			        #     -sourceRangeStart $source_ip
-                    # ixNet setA [ixNet getA $hGroup -startMcastAddr]/singleValue -value $group_ip
-                    set pattern  [ixNet getA [ixNet getA $hGroup -startMcastAddr] -pattern]
-                    SetMultiValues $hGroup "-startMcastAddr" $pattern $group_ip
-                    ixNet commit
-
-                    if {[info exists source_ip]} {
-                        # ixNet setA [ixNet getA $hSource -startUcastAddr]/singleValue -value $source_ip
-                        set pattern  [ixNet getA [ixNet getA $hSource -startUcastAddr] -pattern]
-                        SetMultiValues $hSource "-startUcastAddr" $pattern $source_ip
-                    }
-                    if {[info exists source_step]} {
-                        set pattern  [ixNet getA [ixNet getA $hSource -ucastAddrIncr] -pattern]
-                        SetMultiValues $hSource "-ucastAddrIncr" $pattern $source_step
-                    }
-                    if {[info exists source_num]} {
-                        # ixNet setA [ixNet getA $hSource -ucastSrcAddrCnt]/singleValue -value $source_num
-                        set pattern  [ixNet getA [ixNet getA $hSource -ucastSrcAddrCnt] -pattern]
-                        SetMultiValues $hSource "-ucastSrcAddrCnt" $pattern $source_num
-                    }
+        }
+        foreach group $groupList {
+        Deputs Step10
+        if { [ $group isa MulticastGroup ] == 0 } {
+            return [ GetErrorReturnHeader "Invalid MultcastGroup object... $group" ]
+        }
+        set grpIndex [ lsearch $group_list $group ]
+        if { $grpIndex >= 0 } {
+            Deputs Step30
+            foreach hIgmp $handle {
+                set hGroup	$group_handle($group,$hIgmp)
+                ixNet setA $hGroup -enabled True
                 ixNet commit
-                }
             }
-            }
-            } 
-        return
-        }
-        set ip_addr [ixNet getA [ixNet getA $ipHandle -address]/singleValue -value]
-                # set pattern  [ixNet getA [ixNet getA $ipHandle -address] -pattern]
-                # SetMultiValues $ipHandle "-address" $pattern $value
-        if {![info exists ipaddr]} {
-            Deputs "no configurable Ip Address found of IgmpHost.. returning"
-            return
-        }
-		if {$ip_addr == $ipaddr} {
-			set matched_int ipHandle
-        }
-        if {[info exists matched_int]} {
-            Deputs "found matched Ip interface"
-            set int $matched_int
         } else {
-            Deputs "no matching Ip interface found, calling host class"
-            if { [ GetObject $this.host ] == "" } {
-                Host $this.host $portObj
+            Deputs Step40
+            set filter_mode [ $group cget -filter_mode ]
+            set group_ip [ $group cget -group_ip ]
+            set group_num [ $group cget -group_num ]
+            set group_step [ $group cget -group_step ]
+            set group_modbit [ $group cget -group_modbit ]
+            set source_ip [ $group cget -source_ip ]
+            set source_num [ $group cget -source_num ]
+            set source_step [ $group cget -source_step ]
+            set source_modbit [ $group cget -source_modbit ]
+            Deputs "=group prop= filter_mode:$filter_mode group_ip:$group_ip group_num:$group_num group_step:$group_step group_modbit:$group_modbit source_ip:$source_ip source_num:$source_num source_step:$source_step source_modbit:$source_modbit"
+            Deputs Step45
+            Deputs "handle:$handle"
+            foreach hIgmp $handle {
+
+                if {[regexp {(igmpHost)} $hIgmp igmp igmpHandle] != 0} {
+                    set hGroup [ ixNet getL $hIgmp igmpMcastIPv4GroupList]
+                    set hSource [ixNet getL $hGroup igmpUcastIPv4SourceList]
+
+                    if {[info exists source_step] && $source_step != ""} {
+                        if { [ IsIPv6Address $source_step ] } {
+                            set source_step "0.0.0.1"
+                        }
+                    }
+                } elseif {[regexp {(mldHost)} $hIgmp mld mldHandle] != 0} {
+
+                    set hGroup [ ixNet getL $hIgmp mldMcastIPv6GroupList]
+                    set hSource [ixNet getL $hGroup mldUcastIPv6SourceList]
+
+                    if {[info exists source_ip] && $source_ip == "0.0.0.0"} {
+                        set source_ip "aaaa:0:0:0:0:0:0:0"
+                    }
+                    if {[info exists source_step] && $source_step != ""} {
+                        if { [ IsIPv4Address $source_step ] } {
+                            set source_step "0:0:0:0:0:0:0:1"
+                        }
+                    }
+
+                } else {
+                    Deputs "didn't match with Igmp or Mld for handle $handle"
+                }
+
+                Deputs "group handle retrieved from igmp handle is $hGroup"
+                # ixNet setM $hSource \
+                #     -sourceRangeCount $source_num \
+                #     -sourceRangeStart $source_ip
+                # ixNet setA [ixNet getA $hGroup -startMcastAddr]/singleValue -value $group_ip
+                set pattern  [ixNet getA [ixNet getA $hGroup -startMcastAddr] -pattern]
+                SetMultiValues $hGroup "-startMcastAddr" $pattern $group_ip
+                ixNet commit
+
+                if {[info exists source_ip]} {
+                    # ixNet setA [ixNet getA $hSource -startUcastAddr]/singleValue -value $source_ip
+                    set pattern  [ixNet getA [ixNet getA $hSource -startUcastAddr] -pattern]
+                    SetMultiValues $hSource "-startUcastAddr" $pattern $source_ip
+                }
+                if {[info exists source_step]} {
+                    set pattern  [ixNet getA [ixNet getA $hSource -ucastAddrIncr] -pattern]
+                    SetMultiValues $hSource "-ucastAddrIncr" $pattern $source_step
+                }
+                if {[info exists source_num]} {
+                    # ixNet setA [ixNet getA $hSource -ucastSrcAddrCnt]/singleValue -value $source_num
+                    set pattern  [ixNet getA [ixNet getA $hSource -ucastSrcAddrCnt] -pattern]
+                    SetMultiValues $hSource "-ucastSrcAddrCnt" $pattern $source_num
+                }
+            ixNet commit
             }
-			Deputs "args:$args"
-            eval {$this.host} config $args
-            set int [ $this.host cget -handle ]
         }
-    	
-            
-        # ixNet setA $handle \
-        #     -interfaceType "Protocol Interface" \
-        #     -interfaces $int
-        ixNet commit
-    # }
+        }
+        }
+    return
+    }
+    set ip_addr [ixNet getA [ixNet getA $ipHandle -address]/singleValue -value]
+            # set pattern  [ixNet getA [ixNet getA $ipHandle -address] -pattern]
+            # SetMultiValues $ipHandle "-address" $pattern $value
+    if {![info exists ipaddr]} {
+        Deputs "no configurable Ip Address found of IgmpHost.. returning"
+        return
+    }
+    if {$ip_addr == $ipaddr} {
+        set matched_int ipHandle
+    }
+    if {[info exists matched_int]} {
+        Deputs "found matched Ip interface"
+        set int $matched_int
+    } else {
+        Deputs "no matching Ip interface found, calling host class"
+        if { [ GetObject $this.host ] == "" } {
+            Host $this.host $portObj
+        }
+        Deputs "args:$args"
+        eval {$this.host} config $args
+        set int [ $this.host cget -handle ]
+    }
+
+    ixNet commit
 
 	foreach h $handle {
 		if { [ info exists version ] } {
@@ -642,16 +621,34 @@ Deputs "----- TAG: $tag -----"
 
 					set pattern  [ixNet getA [ixNet getA $hGroup -active] -pattern]
                     SetMultiValues $hGroup "-active" $pattern true
-                    set pattern  [ixNet getA [ixNet getA $hGroup -startMcastAddr] -pattern]
-                    SetMultiValues $hGroup "-startMcastAddr" $pattern $group_ip
-                    set pattern  [ixNet getA [ixNet getA $hGroup -mcastAddrCnt] -pattern]
-                    SetMultiValues $hGroup "-mcastAddrCnt" $pattern $group_num
-                    set pattern  [ixNet getA [ixNet getA $hGroup -sourceMode] -pattern]
-                    SetMultiValues $hGroup "-sourceMode" $pattern $filter_mode
+                    if { [info exists group_ip] && [info exists group_step] } {
+                        set pattern  "counter"
+                        SetMultiValues $hGroup "-startMcastAddr" $pattern $group_ip $group_step
+                    } elseif  { [info exists group_ip] && ![info exists group_step] } {
+                        set pattern  [ixNet getA [ixNet getA $hGroup -startMcastAddr] -pattern]
+                        SetMultiValues $hGroup "-startMcastAddr" $pattern $group_ip
+                    }
+                    if { [info exists group_step] } {
+                        set ipPattern [ixNet getA [ixNet getA $hGroup -mcastAddrIncr] -pattern]
+                        SetMultiValues $hGroup "-mcastAddrIncr" $ipPattern $group_step
+                    }
+                    if { [info exists group_num] } {
+                        set pattern  [ixNet getA [ixNet getA $hGroup -mcastAddrCnt] -pattern]
+                        SetMultiValues $hGroup "-mcastAddrCnt" $pattern $group_num
+                    }
+                    if { [info exists filter_mode] } {
+                        set pattern  [ixNet getA [ixNet getA $hGroup -sourceMode] -pattern]
+                        SetMultiValues $hGroup "-sourceMode" $pattern $filter_mode
+                    }
 					if { [ IsIPv4Address $source_ip ] } {
                         set hSource [ ixNet add $hGroup igmpUcastIPv4SourceList]
-                        set pattern  [ixNet getA [ixNet getA $hSource -startUcastAddr] -pattern]
-                        SetMultiValues $hSource "-startUcastAddr" $pattern $source_ip
+                        if { [info exists source_ip] && [info exists source_step] } {
+                            set pattern  "counter"
+                            SetMultiValues $hSource "-startUcastAddr" $pattern $source_ip $source_step
+                        } elseif  { [info exists source_ip] && ![info exists source_step] } {
+                            set pattern  [ixNet getA [ixNet getA $hSource -startUcastAddr] -pattern]
+                            SetMultiValues $hSource "-startUcastAddr" $pattern $source_ip
+                        }
                         if {[info exists source_step]} {
                             set pattern  [ixNet getA [ixNet getA $hSource -ucastAddrIncr] -pattern]
                             SetMultiValues $hSource "-ucastAddrIncr" $pattern $source_step
@@ -1033,7 +1030,6 @@ class MldHost {
                         lappend vportTopoList $vportObj
                     }
                     if {[string first $hPort $vportTopoList] == -1} {
-
                         set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
                         ixNet commit
                         set deviceGroupObj [ixNet add $topoObj deviceGroup]
@@ -1059,7 +1055,7 @@ class MldHost {
         set topoObjList [ixNet getL [ixNet getRoot] topology]
         if { [ llength $topoObjList ] == 0 } {
             set handle [CreateProtoHandleFromRoot $hPort mldHost ipv6]
-            #set ipHandle [GetDependentNgpfProtocolHandle $handle ip]        
+            set ipHandle [GetDependentNgpfProtocolHandle $handle ip]
             ixNet setA $handle -name $this
             ixNet commit
         } elseif { [ llength $topoObjList ] != 0 } {
@@ -1167,28 +1163,45 @@ Deputs "----- TAG: $tag -----"
 
                     set pattern  [ixNet getA [ixNet getA $hGroup -active] -pattern]
                     SetMultiValues $hGroup "-active" $pattern true
-					set pattern  [ixNet getA [ixNet getA $hGroup -mcastAddrCnt] -pattern]
-                    SetMultiValues $hGroup "-mcastAddrCnt" $pattern $group_num
-                    set pattern  [ixNet getA [ixNet getA $hGroup -startMcastAddr] -pattern]
-                    SetMultiValues $hGroup "-startMcastAddr" $pattern $group_ip
-                    set pattern  [ixNet getA [ixNet getA $hGroup -mcastAddrIncr] -pattern]
-                    SetMultiValues $hGroup "-mcastAddrIncr" $pattern $group_step
-                    set pattern  [ixNet getA [ixNet getA $hGroup -sourceMode] -pattern]
-                    SetMultiValues $hGroup "-sourceMode" $pattern $filter_mode
-
+                    if { [info exists group_num] } {
+                        set pattern  [ixNet getA [ixNet getA $hGroup -mcastAddrCnt] -pattern]
+                        SetMultiValues $hGroup "-mcastAddrCnt" $pattern $group_num
+                    }
+                    if { [info exists group_ip] && [info exists group_step] } {
+                        set pattern  "counter"
+                        SetMultiValues $hGroup "-startMcastAddr" $pattern $group_ip $group_step
+                    } elseif  { [info exists group_ip] && ![info exists group_step] } {
+                        set pattern  [ixNet getA [ixNet getA $hGroup -startMcastAddr] -pattern]
+                        SetMultiValues $hGroup "-startMcastAddr" $pattern $group_ip
+                    }
+                    if { [info exists group_step] } {
+                        set pattern  [ixNet getA [ixNet getA $hGroup -mcastAddrIncr] -pattern]
+                        SetMultiValues $hGroup "-mcastAddrIncr" $pattern $group_step
+                    }
+                    if { [info exists filter_mode] } {
+                        set pattern  [ixNet getA [ixNet getA $hGroup -sourceMode] -pattern]
+                        SetMultiValues $hGroup "-sourceMode" $pattern $filter_mode
+                    }
 					Deputs "sourceip: $source_ip"
                     if { [ IsIPv6Address $source_ip ] } {
-        Deputs Step48
-
+                        Deputs Step48
                         set hSource [ ixNet add $hGroup mldUcastIPv6SourceList ]
-        Deputs $hSource
-
-                        set pattern  [ixNet getA [ixNet getA $hSource -ucastSrcAddrCnt] -pattern]
-                        SetMultiValues $hSource "-ucastSrcAddrCnt" $pattern $source_num
-                        set pattern  [ixNet getA [ixNet getA $hSource -startUcastAddr] -pattern]
-                        SetMultiValues $hSource "-startUcastAddr" $pattern $source_ip
-                        set pattern  [ixNet getA [ixNet getA $hSource -ucastAddrIncr] -pattern]
-                        SetMultiValues $hSource "-ucastAddrIncr" $pattern $source_step
+                        Deputs $hSource
+                        if { [info exists source_num] } {
+                            set pattern  [ixNet getA [ixNet getA $hSource -ucastSrcAddrCnt] -pattern]
+                            SetMultiValues $hSource "-ucastSrcAddrCnt" $pattern $source_num
+                        }
+                        if { [info exists source_ip] && [info exists source_step] } {
+                            set pattern  "counter"
+                            SetMultiValues $hSource "-startUcastAddr" $pattern $source_ip $source_step
+                        } elseif  { [info exists source_ip] && ![info exists source_step] } {
+                            set pattern  [ixNet getA [ixNet getA $hSource -startUcastAddr] -pattern]
+                            SetMultiValues $hSource "-startUcastAddr" $pattern $source_ip
+                        }
+                        if { [info exists source_step] } {
+                            set pattern  [ixNet getA [ixNet getA $hSource -ucastAddrIncr] -pattern]
+                            SetMultiValues $hSource "-ucastAddrIncr" $pattern $source_step
+                        }
                     } else {
                         error "$errNumber(1) Invalid Ipv6 address"
                     }

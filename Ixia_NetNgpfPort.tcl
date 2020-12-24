@@ -3001,7 +3001,7 @@ class Host {
 	public variable hPort
 	public variable portObj
 	public variable static
-	# public variable ip_version
+	public variable ip_version
     public variable hostInfo
     public variable ipVersion
 }
@@ -3090,8 +3090,10 @@ body Host::config { args } {
             -ipaddr {
                 if { [IsIPv4Address $value] } {
                     set ipv4_addr $value
+                    set type "ipv4"
                 } else {
                     set ipv6_addr $value
+                    set type "ipv6"
                 }
             }
             -ipaddr_step {
@@ -3103,6 +3105,7 @@ body Host::config { args } {
             }
             -ipv4_addr {
 				set ipv4_addr $value
+				set type "ipv4"
             }
             -ipv4_addr_step {
 				set ipv4_addr_step $value
@@ -3119,6 +3122,7 @@ body Host::config { args } {
 			}
 			-ipv6_addr {
 				set ipv6_addr $value
+				set type "ipv6"
 			}
 			-ipv6_addr_step {
 				set ipv6_addr_step $value
@@ -3144,8 +3148,55 @@ body Host::config { args } {
 			}
 		}
     }	
-	
+    if { [info exists ipv4_prefix_len] } {
+        if { $ipv4_prefix_len != "" } {
+            if {$type == "ipv4"} {
+                if {[string first "." $ipv4_prefix_len] != -1} {
+                    set ipv4_prefix_len [SubnetToPrefixlenV4 $ipv4_prefix_len]
+                } else {
+                    set ipv4_prefix_len $ipv4_prefix_len
+                }
+            } else {
+                set ipv4_prefix_len $ipv4_prefix_len
+            }
+        } else {
+            if {$type == "ipv4"} {
+                set ipv4_prefix_len 24
+            } else {
+                set ipv6_prefix_len 64
+            }
+        }
+    }
+    if { [info exists ipv4_addr_step] } {
+        if { $ipv4_addr_step != "" } {
+            set ipv4_addr_step [GetIpV46Step $type $ipv4_prefix_len $ipv4_addr_step]
+        } else {
+            set ipv4_addr_step [GetIpV46Step $type $ipv4_prefix_len 1]
+        }
+    }
+    if { [info exists ipv4_gw_step] } {
+        if { $ipv4_gw_step != "" } {
+            set ipv4_gw_step [GetIpV46Step $type $ipv4_prefix_len $ipv4_gw_step]
+        } else {
+            set ipv4_gw_step [GetIpV46Step $type $ipv4_prefix_len 1]
+        }
+    }
+    if { [info exists ipv6_addr_step] } {
+        if { $ipv6_addr_step != "" } {
+            set ipv6_addr_step [GetIpV46Step $type $ipv6_prefix_len $ipv6_addr_step]
+        } else {
+            set ipv6_addr_step [GetIpV46Step $type $ipv6_prefix_len 1]
+        }
+    }
+    if { [info exists ipv6_gw_step] } {
+        if { $ipv6_gw_step != "" } {
+            set ipv6_gw_step [GetIpV46Step $type $ipv6_prefix_len $ipv6_gw_step]
+        } else {
+            set ipv6_gw_step [GetIpV46Step $type $ipv6_prefix_len 1]
+        }
+    }
 	set pfxIncr 	[ GetStepPrefixlen $ipv4_addr_step ]
+
 	if { [ info exists ipv4_gw_step ] } {
 		set gwPfxIncr	[ GetStepPrefixlen $ipv4_gw_step ]
 	}
@@ -3316,8 +3367,18 @@ body Host::config { args } {
                         set ipv4Obj [ lindex [ ixNet getList $int ipv4 ] 0 ]
                     }
                     set ipv4Obj [ixNet remapIds $ipv4Obj]
-                    ixNet setA [ixNet getA $ipv4Obj -address]/singleValue -value $ipv4_addr
-                    if {[info exists ipv4_gw]} {
+                    if { [info exists ipv4_addr] && [info exists ipv4_addr_step] } {
+                        set pattern  "counter"
+                        SetMultiValues $ipv4Obj "-address" $pattern $ipv4_addr $ipv4_addr_step
+                        #ixNet setA [ixNet getA $ipv4Obj -address]/singleValue -value $ipv4_addr
+                    } elseif { [info exists ipv4_addr] && ![info exists ipv4_addr_step] } {
+                        ixNet setA [ixNet getA $ipv4Obj -address]/singleValue -value $ipv4_addr
+                    }
+                    if { [info exists ipv4_gw] && [info exists ipv4_gw_step] } {
+                        set pattern  "counter"
+                        SetMultiValues $ipv4Obj "-gatewayIp" $pattern $ipv4_gw $ipv4_gw_step
+                        #ixNet setA [ixNet getA $ipv4Obj -gatewayIp]/singleValue -value $ipv4_gw
+                    } elseif { [info exists ipv4_gw] && ![info exists ipv4_gw_step] } {
                         ixNet setA [ixNet getA $ipv4Obj -gatewayIp]/singleValue -value $ipv4_gw
                     }
                     if {[info exists ipv4_prefix_len]} {
@@ -3334,12 +3395,20 @@ body Host::config { args } {
 				    } else {
                         set ipv6Obj [ixNet getL $int ipv6]
                     }
+                    if { [info exists ipv6_addr] && [info exists ipv6_addr_step] } {
+                        set pattern  "counter"
+                        SetMultiValues $ipv6Obj "-address" $pattern $ipv6_addr $ipv6_addr_step
+                    } elseif { [info exists ipv6_addr] && ![info exists ipv6_addr_step] } {
+                        ixNet setA [ixNet getA $ipv6Obj -address]/singleValue -value $ipv6_addr
+                    }
 
-                    ixNet setA [ixNet getA $ipv6Obj -address]/singleValue -value $ipv6_addr
                     if {[info exists ipv6_prefix_len]} {
                         ixNet setA [ixNet getA $ipv6Obj -prefix]/singleValue -value $ipv6_prefix_len
                     }
-                    if {[info exists ipv6_gw]} {
+                    if { [info exists ipv6_gw] && [info exists ipv6_gw_step] } {
+                        set pattern  "counter"
+                        SetMultiValues $ipv6Obj "-gatewayIp" $pattern $ipv6_gw $ipv6_gw_step
+                    } elseif { [info exists ipv6_gw] && ![info exists ipv6_gw_step] } {
                         ixNet setA [ixNet getA $ipv6Obj -gatewayIp]/singleValue -value $ipv6_gw
                     }
                     ixNet commit
@@ -3387,7 +3456,7 @@ body Host::config { args } {
 	        }            	
 	    }
 	
-        # $this configure -ipVersion $ip_version
+        $this configure -ip_version $ip_version
 	    Deputs "static $static"
 	    return [ GetStandardReturnHeader ]
 }

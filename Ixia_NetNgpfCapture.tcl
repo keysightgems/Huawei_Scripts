@@ -1024,7 +1024,7 @@ body Capture::update_info { } {
         set chassis [ lindex [ ixNet getL $availableHardware chassis ] 0 ]
         set chassisIp [ ixNet getA $chassis -ip ]
     }
-	debug 1
+	
     
     if { [ llength $portList ] == 0 } { 
 		set p [ $portObj cget -handle ]

@@ -262,7 +262,7 @@ proc Tester::start_router { args } {
 
         }
     }
-    
+
 #	ixTclNet::StartProtocols
     if { $device_type == ""} {
         ixNet exec startAllProtocols
