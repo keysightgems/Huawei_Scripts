@@ -631,7 +631,7 @@ class RouterNgpfEmulationObject {
 	method flappingRouteForTimes { routeBlockList a2w w2a times } {
 		set tag "body RouterNgpfEmulationObject::flappingRouteAsync [info script]"
         Deputs "----- TAG: $tag -----"
-		debug 1
+
 		for { set index 0 } { $index < $times } { incr index } {
 			foreach rb $routeBlockList {
 				$rb disable
@@ -823,6 +823,7 @@ class Topology {
 	
 	inherit NetNgpfObject
 	public variable type
+	public variable router_id_start
 	public variable sim_rtr_num
 	public variable row_num
 	public variable column_num
@@ -854,7 +855,10 @@ Deputs "Args:$args "
 	switch -exact -- $key {
 	    -type {
 		    set type [ string tolower $value ]
-	    }            
+	    }
+	    -router_id_start {
+	        set router_id_start $value
+	    }
 	    -sim_rtr_num {
 		    set sim_rtr_num $value
 	    }

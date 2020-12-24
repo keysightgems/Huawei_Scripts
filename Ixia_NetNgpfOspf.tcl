@@ -373,7 +373,6 @@ Deputs "----- TAG: $tag -----"
     set hNetworkRange [ ixNet remapIds $hNetworkRange ]
     set hNetworkGroup [ ixNet remapIds $hNetworkGroup ]
     #Available options are netTopologyCustom netTopologyFatTree netTopologyGrid netTopologyHubNSpoke netTopologyLinear netTopologyMesh netTopologyRing netTopologyTree
-    set linearTopology [ixNet add $hNetworkRange netTopologyLinear]
     ixNet commit
 
 	foreach { key value } $args {
@@ -390,20 +389,35 @@ Deputs "----- TAG: $tag -----"
 		if { $topo == "" || [ $topo isa Topology ] == 0 } {
 			return [GetErrorReturnHeader "No valid object found...-topo $topo"]
 		}
-		
+		set typeList {netTopologyCustom netTopologyFatTree netTopologyGrid netTopologyHubNSpoke netTopologyLinear netTopologyMesh netTopologyRing netTopologyTree}
 		set type [$topo cget -type]
+		foreach netType $typeList {
+            if {[string first $type [string tolower $netType]] != -1 } {
+                set type $netType
+                set netTopology [ixNet add $hNetworkRange $netType]
+                ixNet commit
+                break
+            }
+        }
 		set sim_rtr_num [$topo cget -sim_rtr_num]
 		set row_num [$topo cget -row_num]
 		set column_num [$topo cget -column_num]
 		set attach_row [$topo cget -attach_row]
 		set attach_column [$topo cget -attach_column]
-		
-		ixNet setM $hNetworkRange \
-			-numRows $row_num \
-			-numCols $column_num \
-			-entryRow $attach_row \
-			-entryColumn $attach_column
-		
+		if { [info exists netTopology] } {
+		    ixNet setM $netTopology -rows $row_num -columns $column_num
+		    ixNet commit
+		}
+		set routerId [$topo cget -router_id_start]
+		if { [info exists routerId] } {
+		    set simRouteObj [ixNet getL $hNetworkRange simRouter]
+		    set ipPattern [ixNet getA [ixNet getA $simRouteObj -routerId] -pattern]
+            SetMultiValues $simRouteObj "-routerId" $ipPattern $routerId
+		}
+		# The below arguments not present in NGPF
+        #-entryRow $attach_row \
+        #-entryColumn $attach_column
+
 	} else {
 		return [GetErrorReturnHeader "Madatory parameter needed...-topo"]
 	}
@@ -1986,19 +2000,24 @@ Deputs "Args:$args "
 	   set key [string tolower $key]
 	   switch -exact -- $key {
 		  
-		  -age {
-				set age $value
-		  }            
-			-checksum {
-				set checksum $value
-		  }
-		  -metric {
-				set metric $value
-		  }            
-			-route_block {
-				set route_block $value
-		  }
-
+            -age {
+                set age $value
+            }
+            -checksum {
+                set checksum $value
+            }
+            -metric {
+                set metric $value
+            }
+            -route_block {
+                set route_block $value
+            }
+            -from {
+                set from $value
+            }
+            -to {
+                set to $value
+            }
 	   }
     }
 	if { [ info exists ipv4PoolObj ] } {
@@ -2014,6 +2033,12 @@ Deputs "Args:$args "
 	if { [ info exists metric ] } {
 		ixNet setA [ixNet getA $ospfRouteObj -metric]/singleValue -value $metric
 	    ixNet commit
+	}
+	if { [info exists from ] } {
+        #Need clarification for this argument
+	}
+	if { [info exists to ] } {
+        #Need clarification for this argument
 	}
     if { [ info exists route_block ] } {
 	

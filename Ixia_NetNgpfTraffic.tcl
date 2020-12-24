@@ -1445,7 +1445,6 @@ body Traffic::config { args  } {
 					set dstHandle [getTopoHandle $dstPortHandle]
 					Deputs "dstHandle:$dstHandle"
                 } elseif { [ $dstObj isa RouteBlock ] } {
-                    puts "Suji"
                     if { [ $dstObj cget -protocol ] == "bgp" } {
                         set routeBlockHandle [ $dstObj cget -handle ]
                         set hBgp [ ixNet getP $routeBlockHandle ]

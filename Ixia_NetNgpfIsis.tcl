@@ -631,6 +631,7 @@ body SimulatedRoute::config { args } {
                     set connector [ixNet add $ipv4PoolObj connector]
                     ixNet setA $connector -connectedTo $isisHandle
                     ixNet commit
+
                 }
                 ixNet commit
                 if {[info exists metric]} {

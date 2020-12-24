@@ -404,7 +404,10 @@ Deputs "Args:$args "
 	}
 	set range $handle
     if { [ info exists count ] } {
-        ixNet setA $handle -count $count
+        #ixNet setA $handle -count $count
+        set deviceGroupObj [GetDependentNgpfProtocolHandle $handle "deviceGroup"]
+        ixNet setA $deviceGroupObj -multiplier $count
+        ixNet commit
     }
 
 	if {[$this cget -dhcpStackVersion] == "ipv4"} {
