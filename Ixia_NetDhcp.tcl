@@ -546,6 +546,7 @@ Deputs "----- TAG: $tag -----"
 body DhcpHost::resume {} {
     set tag "body DhcpHost::resume [info script]"
 Deputs "----- TAG: $tag -----"
+debug 1
 	if { [ catch {
 		ixNet exec dhcpClientResume $handle
 	} ] } {
@@ -1115,7 +1116,7 @@ body DhcpHost::set_dhcp_msg_option { args } {
 Deputs "----- TAG: $tag -----"
 
 	set EMsgType [ list discover request solicit ]
-
+	set root [ixNet getRoot]
 #param collection
 Deputs "Args:$args "
     foreach { key value } $args {
@@ -1620,6 +1621,7 @@ Deputs "Args:$args "
             }
         }
 	
+	if {[info exists group]} {
 	foreach grp $group {
 
 		set group_ip 	[ $grp cget -group_ip ]
@@ -1633,6 +1635,7 @@ Deputs "Args:$args "
 			-groupFrom $group_ip \
 			-incrementStep [ GetPrefixV4Step $group_modbit $group_step ] \
 			-groupCount $group_num
+	}
 	}
 	
 	ixNet commit
@@ -1732,6 +1735,7 @@ Deputs "Args:$args "
         }
     }
 	
+	if {[info exists group]} {
 	foreach grp $group {
 		set filter_mode	[ $grp cget -filter_mode ]
 		set source_ip 	[ $grp cget -source_ip ]
@@ -1756,6 +1760,7 @@ Deputs "Args:$args "
 			-sourceRangeCount $source_num \
 			-sourceRangeStart $source_ip
 	
+	}
 	}
 	ixNet commit
 	return [ GetStandardReturnHeader ]
@@ -2863,7 +2868,7 @@ class IPoEHost {
 	    set sg_ethernet $stack
 	    #-- add dhcp endpoint stack
 	    set sg_ipEndpoint [ixNet add $sg_ethernet ipEndpoint]
-	    ixNet setA $sg_ipEndpoint -name $this
+	    # ixNet setA $sg_ipEndpoint -name $this
 	    ixNet commit
 	    set sg_ipEndpoint [lindex [ixNet remapIds $sg_ipEndpoint] 0]
 	    set hIp $sg_ipEndpoint
@@ -3466,7 +3471,7 @@ class IpHost {
 	    set sg_ethernet $stack
 	    #-- add ipoe endpoint stack
 	    set sg_ipEndpoint [ixNet add $sg_ethernet ipEndpoint]
-	    ixNet setA $sg_ipEndpoint -name $this
+	    # ixNet setA $sg_ipEndpoint -name $this
 	    ixNet commit
 	    set sg_ipEndpoint [lindex [ixNet remapIds $sg_ipEndpoint] 0]
 	    set hIp $sg_ipEndpoint

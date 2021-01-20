@@ -108,9 +108,11 @@ body IsisSession::reborn {} {
     if {[llength $topoObjList] != [llength $vportList]} {
         foreach topoObj $topoObjList {
             set vportObj [ixNet getA $topoObj -vports]
-            if {$vportObj != $vport && $vport == $hPort} {
-                set ethernetObj [CreateProtoHandleFromRoot $hPort "ethernet"]
-			}
+            foreach vport $vportList {
+                if {$vportObj != $vport && $vport == $hPort} {
+                    set ethernetObj [CreateProtoHandleFromRoot $hPort]
+                }
+            }
             break
         }
     }
@@ -539,7 +541,25 @@ body SimulatedRoute::config { args } {
                 }
             
                 set deviceGroupObj [GetDependentNgpfProtocolHandle $isisHandle "deviceGroup" ]
-                set networkGroupObj [ixNet getL $deviceGroupObj networkGroup]
+                set networkGroupObjList [ixNet getL $deviceGroupObj "networkGroup"]
+                set networkGroupObj ""
+                foreach networkObj $networkGroupObjList {
+                    set ipv4PoolObj [ixNet getL $networkObj ipv4PrefixPools]
+                    set ipv6PoolObj [ixNet getL $networkObj ipv6PrefixPools]
+                    if {$ipv4PoolObj != ""} {
+                        if {[ixNet getL $ipv4PoolObj isisL3RouteProperty] != ""} {
+                            set networkGroupObj networkObj
+                            break
+                        }
+                    }
+                    if {$ipv6PoolObj != ""} {
+                        if {[ixNet getL $ipv6PoolObj isisL3RouteProperty] != ""} {
+                            set networkGroupObj networkObj
+                            break
+                        }
+                    }
+                }
+
                 if {[llength $networkGroupObj] == 0} {
                     set networkGroupObj [ixNet add $deviceGroupObj "networkGroup"]
                     ixNet commit
@@ -568,27 +588,33 @@ body SimulatedRoute::config { args } {
                 } else {
                     set step 1
                 }
-
+                set ipv6PoolObj ""
+                set ipv4PoolObj ""
                 if {[IsIPv6Address $start]} {
                     set ipv6PoolObj [ixNet getL $networkGroupObj ipv6PrefixPools]
                     if {[llength $ipv6PoolObj] == 0} {
                         set ipv6PoolObj [ixNet add $networkGroupObj "ipv6PrefixPools"]
                     }
+                    set connector [ixNet add $ipv6PoolObj connector]
+                    ixNet setA $connector -connectedTo $isisHandle
+                    ixNet commit
                 }
                 if {[IsIPv4Address $start]} {
-                    set ipv4PoolObj [ixNet add $networkGroupObj "ipv4PrefixPools"]
+                    set ipv4PoolObj [ixNet getL $networkGroupObj "ipv4PrefixPools"]
                     if {[llength $ipv4PoolObj] == 0} {
                         set ipv4PoolObj [ixNet add $networkGroupObj "ipv4PrefixPools"]
                     }
+                    set connector [ixNet add $ipv4PoolObj connector]
+                    ixNet setA $connector -connectedTo $isisHandle
+                    ixNet commit
                 }
                 ixNet commit
-
                 if {[info exists metric]} {
-                    if {[info exists ipv4PoolObj]} {
+                    if {[info exists ipv4PoolObj] && $ipv4PoolObj != ""} {
                         set isisRoutePropObj [ixNet getL $ipv4PoolObj isisL3RouteProperty]
                         ixNet setA [ixNet getA $isisRoutePropObj -metric]/singleValue -value $metric
                     }
-                    if {[info exists ipv6PoolObj]} {
+                    if {[info exists ipv6PoolObj] && $ipv6PoolObj != ""} {
                         set isisRoutePropObj [ixNet getL $ipv6PoolObj isisL3RouteProperty]
                         ixNet setA [ixNet getA $isisRoutePropObj -metric]/singleValue -value $metric
                     }

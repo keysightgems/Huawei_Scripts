@@ -1,4 +1,3 @@
-
 # Copyright (c) Ixia technologies 2010-2011, Inc.
 
 # Release Version 1.23
@@ -109,7 +108,9 @@ Deputs "port tx:$tx"
 proc Tester::start_traffic { args } {
     set tag "proc Tester::start_traffic [info script]"
     Deputs "----- TAG: $tag -----"
-
+	puts "Starting All Protocols"
+    ixNet exec startAllProtocols
+	after 50000
     set restartCaptureJudgement 1
 	set apply 0
     
@@ -170,6 +171,7 @@ proc Tester::start_traffic { args } {
 						}
 				    }
 				}
+				
 				ixNet exec apply $root/traffic
 				#Tester::start_capture
                 after 1000				
@@ -693,7 +695,7 @@ proc Tester::start_routers { router } {
 Deputs "----- TAG: $tag -----"
     
 	foreach rt $router {
-		if { [ $rt isa EmulationObject ] == 0 } {
+		if { [ $rt isa EmulationNgpfObject ] == 0 } {
 			return [ GetErrorReturnHeader "$rt is not a valid object." ]
 		}
 	}
@@ -709,7 +711,7 @@ proc Tester::stop_routers { router } {
     Deputs "----- TAG: $tag -----"
     
 		foreach rt $router {
-			if { [ $rt isa EmulationObject ] == 0 } {
+			if { [ $rt isa EmulationNgpfObject ] == 0 } {
 				return [ GetErrorReturnHeader "$rt is not a valid object." ]
 			}
 		}

@@ -2,6 +2,12 @@ package require Itcl
 package require registry
 namespace import itcl::*
 
+dict set protocolGlobalTlvHandle "dhcpv4client" "/globals/topology/dhcpv4client/tlvEditor/defaults/template:1"
+dict set protocolGlobalTlvHandle "dhcpv6client" "/globals/topology/dhcpv6client/tlvEditor/defaults/template:1"
+dict set protocolGlobalTlvHandle "dhcpv4server" "/globals/topology/dhcpv4server/tlvEditor/defaults/template:1"
+dict set protocolGlobalTlvHandle "dhcpv6server" "/globals/topology/dhcpv6server/tlvEditor/defaults/template:1"
+
+
 proc GetEnxNgpfInfo { args } {
    Deputs "GetEnxInfo:$args "
    global enx_portNameList
@@ -33,8 +39,61 @@ proc GetOspfNgpfRouterHandle {handle {option 0}} {
 	if {$option != 0} {
 		return $version
 	}
-		return $returnHandle
+	return $returnHandle
 }
+
+proc getTopoHandle {portHandle} {
+	set topoList [ list ]
+	set topoObj [ixNet getL [ixNet getRoot] topology]
+	Deputs "topoObj :$topoObj"
+	foreach topo $topoObj {
+		foreach port $portHandle {
+		set vport [ixNet getA $topo -vports]
+		if {$vport == $port} {
+			lappend topoList $topo 
+			}
+			}
+		}
+		return $topoList
+}
+
+proc CreateNgpfProtocolView {protocol {type "Per Port"}} {
+    set r_no [expr {int(rand()*100000)}]
+    set view [ixNet add /statistics view]
+    ixNet setMultiAttribute $view -pageTimeout 25 \
+                                                    -type layer23NextGenProtocol \
+                                                    -caption view_$r_no \
+                                                    -visible true -autoUpdate true \
+                                                    -viewCategory NextGenProtocol
+    ixNet commit
+    set view [lindex [ixNet remapIds $view] 0]
+    
+    set advCv [ixNet add $view "advancedCVFilters"]
+    ixNet setMultiAttribute $advCv -grouping \"$type\" \
+                                                     -protocol \{$protocol\} \
+                                                     -sortingStats {}
+    ixNet commit
+    set advCv [lindex [ixNet remapIds $advCv] 0]
+    
+    set ngp [ixNet add $view layer23NextGenProtocolFilter]
+    ixNet setMultiAttribute $ngp -advancedFilterName \"No\ Filter\" \
+                                                   -advancedCVFilter $advCv \
+                                                   -protocolFilterIds [list ] -portFilterIds [list ]
+    ixNet commit
+    set ngp [lindex [ixNet remapIds $ngp] 0]
+
+    set stats [ixNet getList $view statistic]
+    foreach stat $stats {
+         ixNet setA $stat -scaleFactor 1 
+		 ixNet setA $stat -enabled true 
+		 ixNet setA $stat -aggregationType sum
+		 ixNet commit
+    }
+	ixNet setA $view -enabled true
+	ixNet commit
+    ixNet execute refresh $view
+	return $view
+	}
 
 proc CheckForNgpfProtocol {handle protocol} {
 	set result [regexp {[a-z]*} $handle match]
@@ -42,86 +101,56 @@ proc CheckForNgpfProtocol {handle protocol} {
 	return $result
 }
 
-proc GetDependentNgpfProtocolHandle {handle option} {
-    # set result [regexp {(.*)(topology:[0-9]+)/(deviceGroup:[0-9]+).*([0-9]):(.*)$} $handle match match1 match2 match3 match4]
-    set result [regexp {(.*)(topology:[0-9]+)/(deviceGroup:[0-9]+)/(ethernet:[0-9]+)/([a-z|A-Z]+[0-9]+:[0-9]+)(.*)$} $handle match match1 match2 match3 match4 match5 match6]
-	Deputs "match $match match1 $match1 match2 $match2 match3 $match3 match4 $match4 match5 $match5 match6 $match6"
-	set devHandle [join $match1/$match2/$match3]
-	if {$option == "deviceGroup"} {
-		return $devHandle
-	} elseif {$option == "ethernet"} {
-		# set result [regexp {(eth\w+:\d+)} $handle match5]
-		set ethHandle [join $match1/$match2/$match3/$match4]
-		return $ethHandle
-	} elseif {$option == "ip"} {
-		# set result [regexp {(eth\w+:\d+)} $handle match5]
-		# set ethHandle [join $match1/$match2/$match3/$match5]
-		# set result [regexp {(ip\w+:\d+)} $handle match6]
-		set ipHandle [join $match1/$match2/$match3/$match4/$match5]
-		Deputs "returning ipHandle $ipHandle"
-		return $ipHandle
-	} elseif {$option == "networkGroup"} {
-		set networkGroupHandles [ixNet getL $devHandle "networkGroup"]
-		return $networkGroupHandles
-	} elseif {$option == "isisL3Router"} {
-		# set ethHandle [join $match1/$match2/$match3/$match4]
-		set isisRouterHandle [ixNet getL $devHandle isisL3Router]
-		return $isisRouterHandle
-	} elseif {$option == "isisL3"} {
-		set ethHandle [join $match1/$match2/$match3/$match4]
-		set isisHandle [ixNet getL $ethHandle isisL3]
-		return $isisHandle
-	} elseif {$option == "ipv4PrefixPools"} {
-		set networkGroupHandles [ixNet getL $devHandle "networkGroup"]
-		if {$networkGroupHandles == ""} {
-			return ""
-		}
-		set ipv4PoolObj [ixNet getL $networkGroupHandles "ipv4PrefixPools"]
-		return $ipv4PoolObj
-	} elseif {$option == "ipv6PrefixPool"} {
-		set networkGroupHandles [ixNet getL $devHandle "networkGroup"]
-		if {$networkGroupHandles == ""} {
-			return ""
-		}
-		set ipv6PoolObj [ixNet getL $networkGroupHandles "ipv4PrefixPools"]
-		return $ipv6PoolObj
-	}
+proc GetDependentNgpfProtocolHandle {Object {level 1} {occ 0}} {
+	if {[regexp {.+/addrPool:\d+-\d+-per-\d+} $Object]} {
+        set pool_items [GetAddrPoolItems $Object]
+        set Object [split $Object {/}]
+        set Object [join [lrange $Object 0 [expr {[llength $Object] - 2}]] "/"]
+    }
+    if {![regexp {^\d+$} $level]} {
+        if {$occ == 0} {
+            set index [lsearch -regexp [split $Object {/}] $level]
+        } else {
+            set index [lsearch -regexp -all [split $Object {/}] $level]
+            set index [lindex $index end]
+        }
+        if {$index == -1} {error "Error: Could not get the parent from $Object for $level"}
+        set level [expr { [llength [split $Object {/}]] - $index } - 1]
+    }
+    for {set i 1} {$i <= $level} {incr i} {
+        set Object [ixNet getParent $Object]
+    }
+    return $Object
 }
 
-## This proc creates required stack NGPF from root. 
-proc CreateProtoHandleFromRoot {port stack {ipVersion " "} {deviceGroup 0}} {
+## This proc creates required stack NGPF from root.
+proc CreateProtoHandleFromRoot {port {stack ""} {ipVersion ""}} {
     set topoObj [ixNet add [ixNet getRoot] topology -vports $port]
-	ixNet commit
+    ixNet commit
     set deviceGroupObj [ixNet add $topoObj deviceGroup]
-	ixNet commit
-	ixNet setA $deviceGroupObj -multiplier "1"
-	ixNet commit
-	set ethObj [ixNet add $deviceGroupObj ethernet]
-	ixNet commit
-
-	if {$stack == "ethernet"} {
-		set handle $ethObj
-	} elseif {$ipVersion == "ipv4"} {
-		set ipv4Obj [ixNet add $ethObj ipv4]
-		ixNet commit
-		set handle [ixNet add $ipv4Obj $stack]
-		ixNet commit
-	} elseif {$ipVersion == "ipv6"} {
-		set ipv6Obj [ixNet add $ethObj ipv6]
-		ixNet commit
-		set handle [ixNet add $ipv6Obj $stack]
-		ixNet commit
-	} elseif {$ipVersion == " "} {
-		set handle [ixNet add $ethObj $stack]
-		ixNet commit
-	}
-	set handle [ixNet remapIds $handle]
-	if {$deviceGroup == 1} {
-		set deviceGroupObj [ixNet remapIds $deviceGroupObj]
-		return [concat $deviceGroupObj $handle]
-	} else {
-		return $handle
-	}
+    ixNet commit
+    ixNet setA $deviceGroupObj -multiplier "1"
+    ixNet commit
+    set ethObj [ixNet add $deviceGroupObj ethernet]
+    ixNet commit
+    if {$stack == "" || $stack == "ethernet"} {
+        set handle $ethObj
+    } elseif {$ipVersion == "ipv4"} {
+        set ipv4Obj [ixNet add $ethObj ipv4]
+        ixNet commit
+        set handle [ixNet add $ipv4Obj $stack]
+        ixNet commit
+    } elseif {$ipVersion == "ipv6"} {
+        set ipv6Obj [ixNet add $ethObj ipv6]
+        ixNet commit
+        set handle [ixNet add $ipv6Obj $stack]
+        ixNet commit
+    } elseif {$ipVersion == ""} {
+        set handle [ixNet add $ethObj $stack]
+        ixNet commit
+    }
+    set handle [ixNet remapIds $handle]
+    return $handle
 }
 
 proc GenerateProtocolsNgpfObjects { portObj } {
@@ -448,7 +477,33 @@ proc GetValidNgpfHandleObj { objType handle { parentHnd "" } } {
 					# return [lindex $hosts $index]
 				# }
 			}			
-			return ""		
+			return ""
+		}
+		mld_host {
+			set topoObjList [ixNet getL [ixNet getRoot] topology]
+            if { [ llength $topoObjList ] != 0 } {
+                foreach topoObj $topoObjList {
+                    set deviceGroupList [ixNet getL $topoObj deviceGroup]
+                    foreach deviceObj $deviceGroupList {
+                        set ethernetObjList [ixNet getL $deviceObj ethernet]
+                        foreach ethernetObj $ethernetObjList {
+                            set ipv6ObjList [ixNet getL $ethernetObj ipv6]
+                            if { [ llength $ipv6ObjList ] != 0 } {
+                                foreach ipv4Obj $ipv4ObjList {
+                                    set mldObj [ixNet getL $ipv6Obj mldHost]
+                                    if { $igmpObj == $handle } {
+                                        return $handle
+                                    }
+                                    #if {[ixNet getA [ixNet getA $router -interfaces] -description] == $handle} {
+                                    #    return $router
+                                    #}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return ""
 		}
 		isis {
 			set protocols [ixNet getL $parentHnd protocols]
@@ -569,34 +624,50 @@ proc GetValidNgpfHandleObj { objType handle { parentHnd "" } } {
 			}
 			return ""			
 		}
-		dhcp {
-			set protocolStack [ixNet getL $parentHnd protocolStack]
-			set ethernets [ixNet getL $protocolStack ethernet]
-			foreach ethernet $ethernets {
-				set stack [ixNet getL $ethernet dhcpEndpoint]
-				if { $stack == "" } {
-					continue
-				}
-				set ranges [ixNet getL $stack range]
-                set ipv4Ranges [list ]
-				foreach range $ranges {
-				    if { [ixNet getA $range/dhcpRange -ipType] != "IPv4" } {
-						continue
-					}
-                    lappend ipv4Ranges $range
-                    set rangeName [ixNet getA $range/dhcpRange -name]
-					if { $range == $handle } {
-						return [list $stack $range]
-					} elseif { $rangeName == $handle || [string range $handle 1 [expr [string length $handle] - 2]] == $rangeName } {
-						return [list $stack $range]
+		dhcpv4 {
+	  	    set topoObjList [ixNet getL [ixNet getRoot] topology]
+			if { [ llength $topoObjList ] != 0 } {
+				foreach topoObj $topoObjList {
+					set deviceGroupList [ixNet getL $topoObj deviceGroup]
+					foreach deviceObj $deviceGroupList {
+						set ethernetObjList [ixNet getL $deviceObj ethernet]
+						foreach ethernetObj $ethernetObjList {
+							set dhcpv4Client [ixNet getL $ethernetObj dhcpv4client]
+							if { $dhcpv4Client == $handle } {
+								return $handle
+							}
+						}
 					}
 				}
-                # set index [expr $index - 1]
-                # if { $index >= 0 && [llength $ipv4Ranges] > $index} {
-                    # return [list $stack [lindex $ipv4Ranges $index]]
-                # }
-			}
+			}	
 			return ""
+			# set protocolStack [ixNet getL $parentHnd protocolStack]
+			# set ethernets [ixNet getL $protocolStack ethernet]
+			# foreach ethernet $ethernets {
+			# 	set stack [ixNet getL $ethernet dhcpEndpoint]
+			# 	if { $stack == "" } {
+			# 		continue
+			# 	}
+			# 	set ranges [ixNet getL $stack range]
+            #     set ipv4Ranges [list ]
+			# 	foreach range $ranges {
+			# 	    if { [ixNet getA $range/dhcpRange -ipType] != "IPv4" } {
+			# 			continue
+			# 		}
+            #         lappend ipv4Ranges $range
+            #         set rangeName [ixNet getA $range/dhcpRange -name]
+			# 		if { $range == $handle } {
+			# 			return [list $stack $range]
+			# 		} elseif { $rangeName == $handle || [string range $handle 1 [expr [string length $handle] - 2]] == $rangeName } {
+			# 			return [list $stack $range]
+			# 		}
+			# 	}
+            #     # set index [expr $index - 1]
+            #     # if { $index >= 0 && [llength $ipv4Ranges] > $index} {
+            #         # return [list $stack [lindex $ipv4Ranges $index]]
+            #     # }
+			# }
+			# return ""
 		}
 		dhcp_server {
 			set protocolStack [ixNet getL $parentHnd protocolStack]
@@ -628,33 +699,48 @@ proc GetValidNgpfHandleObj { objType handle { parentHnd "" } } {
 			return ""
 		}
 		dhcpv6 {
-			set protocolStack [ixNet getL $parentHnd protocolStack]
-			set ethernets [ixNet getL $protocolStack ethernet]
-			foreach ethernet $ethernets {
-				set stack [ixNet getL $ethernet dhcpEndpoint]
-				if { $stack == "" } {
-					continue
-				}
-				set ranges [ixNet getL $stack range]
-                set ipv6Ranges [list ]
-				foreach range $ranges {
-				    if { [ixNet getA $range/dhcpRange -ipType] != "IPv6" } {
-						continue
-					}
-                    lappend ipv6Ranges $range
-                    set rangeName [ixNet getA $range/dhcpRange -name]
-					if { $range == $handle } {
-						return [list $stack $range]
-					} elseif { $rangeName == $handle || [string range $handle 1 [expr [string length $handle] - 2]] == $rangeName } {
-						return [list $stack $range]
+	  	    set topoObjList [ixNet getL [ixNet getRoot] topology]
+			if { [ llength $topoObjList ] != 0 } {
+				foreach topoObj $topoObjList {
+					set deviceGroupList [ixNet getL $topoObj deviceGroup]
+					foreach deviceObj $deviceGroupList {
+						set ethernetObjList [ixNet getL $deviceObj ethernet]
+						foreach ethernetObj $ethernetObjList {
+							set dhcpv6Client [ixNet getL $ethernetObj dhcpv6client]
+							if { $dhcpv6Client == $handle } {
+								return $handle
+							}
+						}
 					}
 				}
+			}	
+			return ""
+			# set protocolStack [ixNet getL $parentHnd protocolStack]
+			# set ethernets [ixNet getL $protocolStack ethernet]
+			# foreach ethernet $ethernets {
+			# 	set stack [ixNet getL $ethernet dhcpEndpoint]
+			# 	if { $stack == "" } {
+			# 		continue
+			# 	}
+			# 	set ranges [ixNet getL $stack range]
+            #     set ipv6Ranges [list ]
+			# 	foreach range $ranges {
+			# 	    if { [ixNet getA $range/dhcpRange -ipType] != "IPv6" } {
+			# 			continue
+			# 		}
+            #         lappend ipv6Ranges $range
+            #         set rangeName [ixNet getA $range/dhcpRange -name]
+			# 		if { $range == $handle } {
+			# 			return [list $stack $range]
+			# 		} elseif { $rangeName == $handle || [string range $handle 1 [expr [string length $handle] - 2]] == $rangeName } {
+			# 			return [list $stack $range]
+			# 		}
+			# 	}
                 # set index [expr $index - 1]
                 # if { $index >= 0 && [llength $ipv6Ranges] > $index} {
                     # return [list $stack [lindex $ipv6Ranges $index]]
                 # }	
-			}
-			return ""
+			# }
 		}
 		dhcpv6_server {
 			set protocolStack [ixNet getL $parentHnd protocolStack]
@@ -818,6 +904,136 @@ proc GetLdpRouterHandle {handle {option 0}} {
 
 }
 
+# # Unused proc from here
+# proc getDefaultTlvHandle {handle index} {
+# 	set defTlvList [ixNet getL $handle/tlvProfile defaultTlv]
+# 	if {$defTlvList == ""} {
+# 		set tlvHandle [getTlvHandle $handle]
+# 	} else {
+# 		set objList [ixNet getL $defTlvList/value object]
+# 		set tlvHandle [lindex $objList $index]
+# 	}
+# 	return $tlvHandle
+# }
+
+# proc getTlvHandle {handle {templateIndex null}} {
+# 	set tlvList [ixNet getL $handle/tlvProfile tlv]
+# 	if {$tlvList == ""} {
+# 		set tlvHandle [addTlvHandle $handle $templateIndex]
+# 	} else {
+# 		set tlvHandle [ixNet getL $tlvList/value/object:1 field]
+# 		if {$tlvHandle == ""} {
+# 			set tlvHandle [ixNet getL $tlvList/value/object:1 subTlv]
+# 			if {$tlvHandle == ""} {
+# 				set tlvHandle [ixNet getL $tlvList/value/object:1 container]
+# 			}
+# 		}
+# 	}
+# 	return $tlvHandle
+# }
+# # Unused proc to here
+
+proc getGlobalProtocolHandle {protocol} {
+	global protocolGlobalTlvHandle
+	return [dict get $protocolGlobalTlvHandle $protocol]
+}
+
+proc getTlvHandleFromDefaultTlvCode {protocol tlvCode} {
+	set dhcpGlobalTlvTemplate [getGlobalProtocolHandle $protocol]
+	set defaultTlvList [ixNet getL $dhcpGlobalTlvTemplate tlv]
+	foreach tlvEntry $defaultTlvList {
+		set tlvName [ixNet getA $tlvEntry -name]
+		set result [regexp {\[(\d+)\]} $tlvName tlv code] 
+		if {$code == $tlvCode} {
+			# Deputs "returing handle $tlvEntry"
+			return $tlvEntry
+		}
+	}
+}
+
+proc getTlvHandleFromTlvProfileCode {handle tlvCode} {
+	set tlvList [ixNet getL $handle/tlvProfile tlv]
+	foreach tlvEntry $tlvList {
+		set objList [ixNet getL $tlvEntry/value object]
+
+		foreach tlvEntry $objList {
+			set tlvName [ixNet getA $tlvEntry -name]
+			set result [regexp {\[(\d+)\]} $tlvName tlv code]
+			if {$code == $tlvCode} {
+				return $tlvEntry
+			}
+		}
+	}
+}
+
+proc addTlvHandle {handle codeTlv} {
+	# set tlvEntry [lindex [ixNet getL ::ixNet::OBJ-/globals/topology/dhcpv4client/tlvEditor/defaults/template:1 tlv] $templateIndex]
+	set tlvHandle [ixNet execute copyTlv $handle/tlvProfile $codeTlv]
+	ixNet commit
+	set Handle [lindex [split $tlvHandle ,\}] 1]
+	return $Handle
+}
+
+proc findIfTlvExist {handle codeTlv} {
+	set defaultTlv [ixNet getL $handle/tlvProfile defaultTlv]
+	if {$defaultTlv != ""} {
+		set tlvName [ixNet getA $defaultTlv -name]
+		set result [regexp {(\d+)} $tlvName tlv code]
+		if {$code == $codeTlv} {
+			return $defaultTlv
+		}
+	} 
+	set tlvList [ixNet getL $handle/tlvProfile tlv]
+	if {$tlvList != ""} {
+		foreach tlvEntry $tlvList {
+			set tlvName [ixNet getA $tlvEntry -name]
+			set result [regexp {(\d+)} $tlvName tlv code]
+			if {$code == $codeTlv} {
+				return $tlvEntry
+			}
+		}
+	}
+	return ""
+}
+
+proc SetMultiValues {protocolObj attr ipPattern {value ""} {stepValue ""} } {
+if { $ipPattern == "singleValue" } {
+ixNet setA [ixNet getA $protocolObj $attr]/singleValue -value $value
+ixNet commit
+} elseif { $ipPattern == "counter" } {
+if {$value == "" || $value == " "} {
+Deputs ""
+} else {
+ixNet setA [ixNet getA $protocolObj $attr]/counter -start $value
+}
+if {$stepValue == "" || $stepValue == " "} {
+Deputs ""
+} else {
+ixNet setA [ixNet getA $protocolObj $attr]/counter -step $stepValue
+}
+ixNet commit
+} elseif { $ipPattern == "custom" } {
+if {$value == "" || $value == " "} {
+Deputs ""
+} else {
+ixNet setA [ixNet getA $protocolObj $attr]/custom -start $value
+}
+if {$stepValue == "" || $stepValue == " "} {
+Deputs ""
+} else {
+ixNet setA [ixNet getA $protocolObj $attr]/custom -step $stepValue
+}
+ixNet commit
+} elseif { $ipPattern == "valueList" } {
+ixNet setA [ixNet getA $protocolObj $attr]/valueList -values {$value}
+ixNet commit
+} elseif { $ipPattern == "string" } {
+ixNet setA [ixNet getA $protocolObj $attr]/string -pattern $value
+ixNet commit
+}
+}
+
+
 
 #We will add leftover packages once implemented for NGPF
 puts "load package Ixia_Util..."
@@ -904,5 +1120,50 @@ if { [ catch {
 		puts "load package fail...$err $tbcErr"
 	}
 } 
+
+puts "load package Ixia_NetNgpfDhcp..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfDhcp.tcl]
+} err ] } {
+	if { [ catch {
+		source [file join $currDir Ixia_NetNgpfDhcp.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+} 
+
+puts "load package Ixia_NetNgpfPPPoX..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfPPPoX.tcl]
+} err ] } {
+	if { [ catch {
+		source [file join $currDir Ixia_NetNgpfPPPoX.tcl]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+} 
+
+puts "load package Ixia_NetNgpfTraffic..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfTraffic.tcl]
+} err ] } {
+	if { [ catch {
+		source [file join $currDir Ixia_NetNgpfTraffic.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+}
+
+puts "load package Ixia_NetNgpfTester..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfTester.tcl]
+} err ] } {
+	if { [ catch {
+		source [file join $currDir Ixia_NetNgpfTester.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+}
+
 #IxDebugOn
 #IxDebugCmdOn

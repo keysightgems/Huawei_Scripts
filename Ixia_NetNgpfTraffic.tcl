@@ -140,7 +140,7 @@
 
 # -- Class definition...
 class Traffic {
-    inherit NetObject
+    inherit NetNgpfObject
     #--public method
     constructor { port { hTraffic NULL } } {}
     method config { args  } {}
@@ -343,7 +343,7 @@ class Traffic {
     
 }
 class Header {
-    inherit NetObject
+    inherit NetNgpfObject
     constructor { pduPro { pduType "APP" } } {
         #set EMode [ list Incrementing Decremeting Fixed Random ]
         set fieldModes [ list ]
@@ -647,20 +647,25 @@ body Traffic::constructor { port { hTraffic NULL } } {
 		set hPort [ $port cget -handle ]
 	}
     
-    
+    Deputs "traffic :$hTraffic"
+	Deputs "LoadConfigMode: $LoadConfigMode"
+	Deputs "handle : $handle"
 	if { $hTraffic != "NULL" } {
+		Deputs "traffic is Null "
 		set handle $hTraffic
 		set highLevelStream [ ixNet getL $handle configElement ]
 		set endpointSet [ ixNet getL $handle endpointSet ]
         set modifyMode 1
 	} else {
         if { $LoadConfigMode } {
+			Deputs "traffic is loadconfig "
 		    set traffic_name [GetObjNameFromString $this]
 			Deputs "loadconfig Mode traffic name :$traffic_name"
             set handle	[GetValidHandleObj "traffic" $traffic_name $hPort]
            
         }
         if { $handle != "" } {
+			Deputs "handle is Null "
             set highLevelStream [ ixNet getL $handle configElement ]
             set endpointSet [ ixNet getL $handle endpointSet ]
             set modifyMode 1
@@ -686,6 +691,7 @@ body Traffic::constructor { port { hTraffic NULL } } {
 
 body Traffic::config { args  } {
 	global LoadConfigMode
+	Deputs "traffic config ...."
     # in case the handle was removed
 	if { $handle == "" } {
         Deputs "reborn traffic...."
@@ -709,6 +715,8 @@ body Traffic::config { args  } {
 		set highLevelStream ""
         Deputs "hport:$hPort" 
 	}
+	Deputs "WasHandle :$handle"
+	Deputs "portObj : $portObj"
 
     # enable l1Rate use 4 bytes signature and disable data integrity check
 	set root [ixNet getRoot]
@@ -719,13 +727,13 @@ body Traffic::config { args  } {
 	ixNet commit
 
     # get default port Mac and IP address
-    Deputs "Traffic portObj: $portObj"
 	set default_mac [ lindex [ $portObj cget -intf_mac ] 0 ]
 	set default_ip  [ lindex [ $portObj cget -intf_ipv4 ] 0 ]
+	 Deputs "default mac:$default_mac"
+    Deputs "default ip:$default_ip"
 	if { ( $default_ip == "0.0.0.0" ) || ( $default_ip == "" ) } {
 		set default_ip 1.1.1.1
 	}
-
 	if { $default_mac == "" } {
 		set default_int [ lindex [ ixNet getL [ $portObj cget -handle ] interface ] 0 ]
         Deputs "default interface:$default_int"
@@ -941,12 +949,15 @@ body Traffic::config { args  } {
                 if { [string tolower $value] == "rfc2889" } {
                     ixNet setA $root/traffic -enableStreamOrdering true
                     ixNet setA $root/traffic -frameOrderingMode RFC2889
+					ixNet commit
                 } elseif { [string tolower $value] == "none" } {
                     ixNet setA $root/traffic -enableStreamOrdering fasle
                     ixNet setA $root/traffic -frameOrderingMode none
+					ixNet commit
                 } else {
                     ixNet setA $root/traffic -enableStreamOrdering true
                     ixNet setA $root/traffic -frameOrderingMode $value
+					ixNet commit
                 }
                 ixNet commit
             }
@@ -964,6 +975,7 @@ body Traffic::config { args  } {
             }
             -src {
                 set src $value
+				#set src [getTopoHandle $value]
             }
             -dst {
                 set dst $value
@@ -1235,12 +1247,12 @@ body Traffic::config { args  } {
         }
 
     }    
-
+    
     #-- quick stream and advanced stream
     if { [ info exists src ] && [ info exists dst ] } {
         if { [ IsIPv4Address $src ] && [ IsIPv4Address $dst ] } {
             #-- quick stream IPv4
-            Deputs "Traffic type:quick stream IPv4"
+            Deputs "waseemTraffic type:quick stream IPv4"
             #-- Create quick stream
 			##--add judgement for traffic reconfig
 			if { ( [ info exists highLevelStream ] == 0 ) || ( [ llength $highLevelStream ] == 0 ) } {
@@ -1281,21 +1293,21 @@ body Traffic::config { args  } {
                 ixNet commit
             }
          } else {
+			Deputs "waseem1"
             Deputs "objects:[find objects]"
             set srcHandle [ list ]
             set srcPortHandle [ list ]
-            Deputs "src list:$src"
-            #debug 1
+            Deputs "src list:$src"		
             foreach srcEndpoint $src {
                 # Deputs "src:$srcEndpoint"
                 set srcObj [ GetObject $srcEndpoint ]
-                # Deputs "srcObj:$srcObj"			
+                Deputs "srcObj:$srcObj"			
                 if { $srcObj == "" } {
                     Deputs "illegal object...$srcEndpoint"
                     set srcObj $portObj
                     # error "$errNumber(1) key:src value:$src (Not an object)"                
                 }
-                if { ( [ $srcObj isa Port ] == 0 ) && ( [ $srcObj isa EmulationObject ] == 0 ) && ( [ $srcObj isa Host ] == 0 ) } {
+                if { ( [ $srcObj isa Port ] == 0 ) && ( [ $srcObj isa EmulationNgpfObject ] == 0 ) && ( [ $srcObj isa Host ] == 0 ) } {
                     Deputs "illegal object...$src"
                     error "$errNumber(1) key:src value:$src (Not a port or emulation object)"                
                 }
@@ -1303,17 +1315,21 @@ body Traffic::config { args  } {
                     Deputs Step110
                     set srcHandle [ concat $srcHandle "[ $srcObj cget -handle ]/protocols" ]
                     lappend srcPortHandle [ $srcObj cget -handle ]
+					Deputs "srcHandle:$srcHandle"
+					Deputs "srcPortHandle:$srcPortHandle"
+					set srcHandle [getTopoHandle $srcPortHandle]
+					set src $srcHandle
+					Deputs "srcHandle:$srcHandle"
                 } elseif { [ $srcObj isa RouteBlock ] } {
                     Deputs "route block:$srcObj"
-                    #debug 1
                     if { [ $srcObj cget -protocol ] == "bgp" } {
                         set routeBlockHandle [ $srcObj cget -handle ]
                         set hBgp [ ixNet getP $routeBlockHandle ]
                         Deputs "bgp route block:$hBgp"
                         if { [ catch {
-                            set rangeCnt [ llength [ ixNet getL $hBgp networkGroup ] ]
+                            set rangeCnt [ llength [ ixNet getL $hBgp routeRange ] ]
                         } ] } {
-                            set rangeCnt [ llength [ ixNet getL $hBgp networkGroup ] ]
+                            set rangeCnt [ llength [ ixNet getL $hBgp vpnRouteRange ] ]
                         }
 
                         if { $rangeCnt > 1 } {
@@ -1329,46 +1345,75 @@ body Traffic::config { args  } {
                         }
                         set srcHandle [ concat $srcHandle $routeBlockHandle ]
                         lappend srcPortHandle [ $srcObj cget -hPort ]
+						Deputs "srcHandle:$srcHandle"
+					Deputs "srcPortHandle:$srcPortHandle"
+					Deputs "waseem2"
                     } else {
                         set srcHandle [ concat $srcHandle [ $srcObj cget -handle ] ]
                         lappend srcPortHandle [ $srcObj cget -hPort ]
                         set trafficType [ $srcObj cget -type ]
+							Deputs "srcHandle:$srcHandle"
+					Deputs "srcPortHandle:$srcPortHandle"
+					Deputs "waseem3"
                     }
                     set trafficType [ $srcObj cget -type ]
+					Deputs "WaseemtrafficType $trafficType"
                 } elseif { [ $srcObj isa Host ] } {
                     if { [ $srcObj cget -static ] } {
                         set trafficType "ethernetVlan"
                     } else {
-                        set trafficType [ $srcObj cget -ip_version ]
+						Deputs "WaseemtrafficType $trafficType"
+                        set trafficType [ $srcObj cget -ipVersion]
+						
                     }
                     set srcHandle [ concat $srcHandle [ $srcObj cget -handle ] ]
                     lappend srcPortHandle [ $srcObj cget -hPort ]
+						set srcHandle [getTopoHandle $srcPortHandle]
+					Deputs "srcHandle:$srcHandle"
+					Deputs "waseem4"
                 } elseif { [ $srcObj isa MulticastGroup ] } {
                     if { [ $srcObj cget -protocol ] == "mld" } {
                         set trafficType "ipv6"
                     } 
                     set srcHandle [ concat $srcHandle [ $srcObj cget -handle ] ]
                     lappend srcPortHandle [ $srcObj cget -hPort ]
+						Deputs "srcHandle:$srcHandle"
+					Deputs "srcPortHandle:$srcPortHandle"
+					Deputs "waseem5"
                 } elseif { [ $srcObj isa VcLsp ] } {
                     set trafficType "ethernetVlan"
                     set srcHandle [ concat $srcHandle [ $srcObj cget -handle ] ]
                     lappend srcPortHandle [ $srcObj cget -hPort ]
+						Deputs "srcHandle:$srcHandle"
+					Deputs "srcPortHandle:$srcPortHandle"
+					Deputs "waseem6"
                 } elseif { [ $srcObj isa IpHost ] } {
                     set trafficType "ipv4"
                     set srcHandle [ concat $srcHandle [ $srcObj cget -handle ] ]
                     lappend srcPortHandle [ $srcObj cget -hPort ]
+						Deputs "srcHandle:$srcHandle"
+					Deputs "srcPortHandle:$srcPortHandle"
+					Deputs "waseem7"
                 } elseif { [$srcObj isa DeviceGroup] } {
                 	if { $trafficType == "ipv4" } {
                 		if { [$srcObj cget -type] == "IPV4" } {
                 			set srcHandle [ concat $srcHandle [ $srcObj cget -handle ]]
+								Deputs "srcHandle:$srcHandle"
+								Deputs "waseem7"
                 		} else {
                 			set srcHandle [ concat $srcHandle [ $srcObj cget -bgpIpv4NetworkGroup ]]
+							Deputs "srcHandle:$srcHandle"
+								Deputs "waseem8"
                 		}
                 	} elseif { $trafficType == "ipv6" } {
                 	if { [$srcObj cget -type] == "IPV6" } {
                 			set srcHandle [ concat $srcHandle [ $srcObj cget -handle ]]
+							Deputs "srcHandle:$srcHandle"
+								Deputs "waseem9"
                 		} else {
 											set srcHandle [ concat $srcHandle [ $srcObj cget -bgpIpv6NetworkGroup ]]
+											Deputs "srcHandle:$srcHandle"
+								Deputs "waseem10"
 										}
                 	}
               		foreach p [$srcObj cget -portObj] {
@@ -1378,6 +1423,9 @@ body Traffic::config { args  } {
                     Deputs Step120
                     set srcHandle [ concat $srcHandle [ $srcObj cget -handle ] ]
                     lappend srcPortHandle [ $srcObj cget -hPort ]
+					Deputs "srcHandle:$srcHandle"
+					Deputs "srcPortHandle:$srcPortHandle"
+								Deputs "waseem11"
                 }
             }
             Deputs "src handle:$srcHandle"
@@ -1393,7 +1441,7 @@ body Traffic::config { args  } {
                     Deputs "illegal object...$dstEndpoint"
                     set dstObj $portObj             
                 }
-                if { ( [ $dstObj isa Port ] == 0 ) && ( [ $dstObj isa EmulationObject ] == 0 ) && ( [ $dstObj isa Host ] == 0 ) } {
+                if { ( [ $dstObj isa Port ] == 0 ) && ( [ $dstObj isa EmulationNgpfObject ] == 0 ) && ( [ $dstObj isa Host ] == 0 ) } {
                     Deputs "illegal object...$dst"
                     error "$errNumber(1) key:dst value:$dst (Not a port or emulation object)"                
                 }
@@ -1402,15 +1450,17 @@ body Traffic::config { args  } {
                     Deputs Step130
                     set dstHandle [ concat $dstHandle "[ $dstObj cget -handle ]/protocols" ]
                     lappend dstPortHandle [ $dstObj cget -handle ]
+					set dstHandle [getTopoHandle $dstPortHandle]
+					Deputs "dstHandle:$dstHandle"
                 } elseif { [ $dstObj isa RouteBlock ] } {
                     if { [ $dstObj cget -protocol ] == "bgp" } {
                         set routeBlockHandle [ $dstObj cget -handle ]
                         set hBgp [ ixNet getP $routeBlockHandle ]
                         Deputs "bgp route block:$hBgp"
                         if { [ catch {
-                            set rangeCnt [ llength [ ixNet getL $hBgp networkGroup ] ]
+                            set rangeCnt [ llength [ ixNet getL $hBgp routeRange ] ]
                         } ] } {
-                            set rangeCnt [ llength [ ixNet getL $hBgp networkGroup ] ]
+                            set rangeCnt [ llength [ ixNet getL $hBgp vpnRouteRange ] ]
                         }
                         if { $rangeCnt > 1 } {
                             set p [ ixNet getP $routeBlockHandle ]
@@ -1450,6 +1500,7 @@ body Traffic::config { args  } {
                     }                 
                     set dstHandle [ concat $dstHandle [ $dstObj cget -handle ] ]
                     lappend dstPortHandle [ $dstObj cget -hPort ]
+					Deputs "waseemdst $dstHandle $dstPortHandle"
                 } elseif { [ $dstObj isa IpHost ] } {
                     set trafficType "ipv4"
                     set dstHandle [ concat $dstHandle [ $dstObj cget -handle ] ]
@@ -1500,6 +1551,7 @@ body Traffic::config { args  } {
                     -srcDestMesh fullMesh \
                     -allowSelfDestined $sd \
                     -trafficType $trafficType ;#can be ipv4 or ipv6 or ethernetVlan
+				ixNet commit
             }  elseif { $backbone } {
                 Deputs "traffic src/dst type: full mesh"		  
                 ixNet setMultiA $handle \
@@ -1508,6 +1560,7 @@ body Traffic::config { args  } {
                     -srcDestMesh manyToMany \
                     -allowSelfDestined $sd \
                     -trafficType $trafficType ;#can be ipv4 or ipv6 or ethernetVlan
+				ixNet commit
             } else {
                 if { $no_mesh } {
                     Deputs "traffic src/dst type: none"		  		  
@@ -1518,6 +1571,7 @@ body Traffic::config { args  } {
                         -srcDestMesh none \
                         -allowSelfDestined $sd \
                         -trafficType $trafficType ;#can be ipv4 or ipv6 or ethernetVlan
+					ixNet commit
                 } else {
                     Deputs "traffic src/dst type: one 2 one"		  		  
                     ixNet setMultiA $handle \
@@ -1527,6 +1581,7 @@ body Traffic::config { args  } {
                         -srcDestMesh oneToOne \
                         -allowSelfDestined $sd \
                         -trafficType $trafficType ;#can be ipv4 or ipv6 or ethernetVlan
+					ixNet commit
                 }
             }
             if { $enable_sig } {
@@ -1534,7 +1589,7 @@ body Traffic::config { args  } {
                 ixNet commit
             }
             ixNet commit
-            
+            Deputs "Waseem here "
 			if {[info exists enable_mixed_speed] && [regexp -nocase "true" $enable_mixed_speed]} {
 				Deputs "add endpointSet without distinguishing speed ..."
 				set endpointSet [ixNet add $handle endpointSet]
@@ -1604,21 +1659,33 @@ body Traffic::config { args  } {
 				foreach speed [array names srcPortSpeedArr] {
 					if {[catch {
 						Deputs "name: $speed"
-						set srcHandle $srcPortSpeedArr($speed)
-						set dstHandle $dstPortSpeedArr($speed)
+						#Deputs "srcPortSpeedArr $srcPortSpeedArr"
+						Deputs "src:$srcHandle"
+						Deputs "dst:$dstHandle"
+						Deputs "handle:$handle"
+						# set srcHandle $srcPortSpeedArr($speed)
+						# set dstHandle $dstPortSpeedArr($speed)
 						#-- add endpointSet
 						Deputs "add endpointSet..."
 						set endpointSet [ixNet add $handle endpointSet]
 						Deputs "src:$srcHandle"
-						ixNet setA $endpointSet -sources $srcHandle
+						debug 1
+						
+						ixNet setA $endpointSet -sources $srcHandle -destinations $dstHandle
+						
+						
 						Deputs "dst:$dstHandle"
-						ixNet setA $endpointSet -destinations $dstHandle
+						#debug 1
+						#ixNet setA $endpointSet -destinations $dstHandle
+						ixNet commit
+						
 						Deputs Step180
 						#-- for every stream is not bi-direction, thus only one highlevelstream will be created
 						# set highLevelStream [ ixNet getList $handle highLevelStream ]
 						set endpointSet [ ixNet remapIds $endpointSet ]
 						Deputs "ep:$endpointSet"
 						Deputs Step190
+						debug 1 
 					} err]} {
 						error "Source or destination speed doesn't match each other!!!"
 					}
@@ -1629,6 +1696,7 @@ body Traffic::config { args  } {
             set endpointSetList [ ixNet getL $handle endpointSet ]
             set highLevelStream [ ixNet getL $handle configElement ]
             Deputs "highLevelStream:$highLevelStream"
+			Deputs "endpointSetList:$endpointSetList"
         }
         set flag_modify_adv 1
 	} else {
@@ -1658,7 +1726,7 @@ body Traffic::config { args  } {
                 Deputs "head obj:$head"
                 if { $head != "" } {
                     #-- pdu objects
-                    if { [ $head isa NetObject ] } {
+                    if { [ $head isa NetNgpfObject ] } {
                         if { [ $head isa Header ] == 0 } {
                             error "$errNumber(1) key: pdu value: $head (Not a Header)"                
                         }
@@ -2186,8 +2254,12 @@ body Traffic::config { args  } {
 		}
    } else {
         Deputs Step120	
+		Deputs "portObj:$portObj"
+		#Deputs "src:$src"
 		if { [ info exists src ] == 0 } {
-			set src $portObj
+			Deputs "waseem test"
+			set src [getTopoHandle $portObj]
+			#set src $portObj
 		}
         Deputs "src:$src"
 	}
@@ -2225,7 +2297,7 @@ body Traffic::config { args  } {
                 Deputs "head obj:$head"
                 if { $head != "" } {
                     #-- pdu objects
-                    if { [ $head isa NetObject ] } {
+                    if { [ $head isa NetNgpfObject ] } {
                         if { [ $head isa Header ] == 0 } {
                             error "$errNumber(1) key: pdu value: $head (Not a Header)"                
                         }
@@ -2573,7 +2645,7 @@ body Traffic::config { args  } {
                 Deputs "head obj:$head"
                 if { $head != "" } {
                     #-- pdu objects
-                    if { [ $head isa NetObject ] } {
+                    if { [ $head isa NetNgpfObject ] } {
                         if { [ $head isa Header ] == 0 } {
                             error "$errNumber(1) key: pdu value: $head (Not a Header)"                
                         }
@@ -2787,7 +2859,9 @@ body Traffic::config { args  } {
             set tx_mode fixedIterationCount
         }
         foreach configElement $highLevelStream {
+			Deputs "configuring Txnode $configElement"
             ixNet setA $configElement/transmissionControl -type $tx_mode
+			ixNet commit
         }
 		ixNet commit
     }
@@ -2795,13 +2869,16 @@ body Traffic::config { args  } {
     if { [ info exists tx_num ] } {
 		foreach configElement $highLevelStream {
             Deputs "tx_num config:$tx_num"
+			Deputs "configuring Tx num $configElement"
 			ixNet setA $configElement/transmissionControl -frameCount $tx_num
+			ixNet commit
 		}
 		ixNet commit
     }
     
     
     if { [ info exists frame_len_type ] } {
+		Deputs "waseem test2"
         if { $frame_len_type == "incr" } {
             set frame_len_type increment
         } elseif { $frame_len_type == "imix"} {
@@ -2809,13 +2886,17 @@ body Traffic::config { args  } {
         }
 
 		foreach configElement $highLevelStream {
+			Deputs "waseem test3"
+			Deputs "configuring frame_len_type $configElement"
 			ixNet setA $configElement/frameSize -type $frame_len_type
+			ixNet commit
 		}
     }
     
     
     
     if { [ info exists frame_len ] } {
+		Deputs "waseem test4"
 		foreach configElement $highLevelStream {
             if { $frame_len_type == "weightedPairs"} {          
 				#change frame_len format : {{46 64} 30 {64 128} 70} -> {{46 64 30} {64 128 70}}
@@ -2832,8 +2913,10 @@ body Traffic::config { args  } {
 				}
 				Deputs "frameLenList $frameLenList"
                 ixNet setA $configElement/frameSize -weightedPairs $frameLenList -weightedRangePairs $frameLenList
+				ixNet commit
             } else {
                 ixNet setA $configElement/frameSize -fixedSize $frame_len
+				ixNet commit
             }
 			
 		}
@@ -2843,24 +2926,31 @@ body Traffic::config { args  } {
     Deputs Step190
     if { [ info exists min_frame_len ] } {
 		foreach configElement $highLevelStream {
+			Deputs "waseem test1"
 			ixNet setA $configElement/frameSize -incrementFrom $min_frame_len
+			ixNet commit
 		}
     }
     
     if { [ info exists max_frame_len ] } {
+		Deputs "waseem test5"
 		foreach configElement $highLevelStream {
 			ixNet setA $configElement/frameSize -incrementTo $max_frame_len
+			ixNet commit
 		}
     }
     
     if { [ info exists frame_len_step ] } {
+		Deputs "waseem test7"
 		foreach configElement $highLevelStream {
 			ixNet setA $configElement/frameSize -incrementStep $frame_len_step
+			ixNet commit
 		}
 
     }
     Deputs Step200    
     if { [ info exists enable_fcs_error_insertion ] } {
+		Deputs "waseem test8"
         if { $enable_fcs_error_insertion } {
             set crc badCrc
         } else {
@@ -2869,10 +2959,12 @@ body Traffic::config { args  } {
 
 		foreach configElement $highLevelStream {
 			ixNet setA $configElement -crc $crc
+			ixNet commit
 		}
 
     }
     if { [ info exists fill_type ] } {
+		Deputs "waseem test9"
         switch $fill_type {
             constant {
                 set fill_type custom
@@ -2890,6 +2982,7 @@ body Traffic::config { args  } {
         
 		foreach configElement $highLevelStream {
 			ixNet setA $configElement/framePayload -type $fill_type
+			ixNet commit
 		}
     }
     
@@ -2917,11 +3010,13 @@ body Traffic::config { args  } {
 
         foreach configElement $highLevelStream {
             ixNet setA $configElement/framePayload -type $fill_type
+			ixNet commit
         }
 
         if { $payload_type == "CYCBYTE" } {
             foreach configElement $highLevelStream {
                 ixNet setA $configElement/framePayload -customRepeat true
+				ixNet commit
             }
         }
     } 
@@ -2932,6 +3027,7 @@ body Traffic::config { args  } {
 				-customRepeat true \
 				-type custom \
 				-customPattern $payload 
+			ixNet commit
 		}
     }
 	  
@@ -2942,32 +3038,39 @@ body Traffic::config { args  } {
 					ixNet setM $configElement/frameRate \
 						-bitRateUnitsType kbitsPerSec \
 						-type bitsPerSecond 
+					ixNet commit
 				}
 				MBPS {
 					ixNet setM $configElement/frameRate \
 						-bitRateUnitsType mbitsPerSec \
-						-type bitsPerSecond 			
+						-type bitsPerSecond 
+					ixNet commit
 				}
 				BPS {
 					ixNet setM $configElement/frameRate \
 						-bitRateUnitsType bitsPerSec \
 						-type bitsPerSecond 			
+					ixNet commit
 				}
 				FPS {
 					ixNet setM $configElement/frameRate \
-						-type framesPerSecond 			
+						-type framesPerSecond 
+					ixNet commit
 				}
 				PERCENT {
 					ixNet setM $configElement/frameRate \
-						-type percentLineRate 			
+						-type percentLineRate
+					ixNet commit
 				}
 			}
+			ixNet commit
 		}
     }
     Deputs Step230
     if { [ info exists inter_frame_gap ] } {
 		foreach configElement $highLevelStream {
-			ixNet setA $configElement/transmissionControl -minGapBytes $inter_frame_gap       
+			ixNet setA $configElement/transmissionControl -minGapBytes $inter_frame_gap 
+				ixNet commit
 		}
     } else {
         Deputs Step240	    
@@ -2975,7 +3078,8 @@ body Traffic::config { args  } {
 		if { [ string is integer $inter_frame_gap ] } {
             Deputs Step250	
 			foreach configElement $highLevelStream {
-				ixNet setA $configElement/transmissionControl -minGapBytes $inter_frame_gap       
+				ixNet setA $configElement/transmissionControl -minGapBytes $inter_frame_gap     
+					ixNet commit
 			}		
 		}
     }
@@ -2987,20 +3091,23 @@ body Traffic::config { args  } {
                 -interBurstGap $burst_gap \
                 -interBurstGapUnits $burst_gap_units \
                 -enableInterBurstGap $enable_burst_gap
-        }
+        ixNet commit
+		}
     }
     
     if {[info exists burst_packet_count ]} {
         foreach configElement $highLevelStream {
             ixNet setA $configElement/transmissionControl  \
                 -burstPacketCount $burst_packet_count
-        }
+        ixNet commit
+		}
     }
     
     if { [ info exists stream_load ] } {
 		foreach configElement $highLevelStream {
 			ixNet setM $configElement/frameRate \
 				-rate $stream_load
+		ixNet commit
 		}
 
     }
@@ -3021,7 +3128,9 @@ body Traffic::config { args  } {
 	    }
 	    set root [ixNet getRoot]
 	    ixNet setA $root/traffic/statistics/latency -mode $latency_type
-    }
+		ixNet commit
+	}
+	
     
     if { [ info exists precedence_tracking ] 
 		&& $precedence_tracking } {
@@ -3033,6 +3142,7 @@ body Traffic::config { args  } {
 			foreach configElement $highLevelStream {
 				ixNet setA $configElement/transmissionDistribution \
 					-distributions ipv4Precedence0
+					ixNet commit
 			}
 		}
 	}
@@ -3046,6 +3156,7 @@ body Traffic::config { args  } {
 			foreach configElement $highLevelStream {
 				ixNet setA $configElement/transmissionDistribution \
 					-distributions vlanVlanUserPriority0
+					ixNet commit
 			}
 		}
 	}
@@ -3059,6 +3170,7 @@ body Traffic::config { args  } {
 			foreach configElement $highLevelStream {
 				ixNet setA $configElement/transmissionDistribution \
 					-distributions mplsMplsExp0
+					ixNet commit
 			}
 		}
 	}
@@ -3167,6 +3279,7 @@ body Traffic::config { args  } {
     
     foreach hs $highLevelStream {
         foreach stack [ ixNet getList $hs stack ] {
+			Deputs "stack: $stack"
             if { [ regexp ipv4 $stack ] } {
                 foreach filed [ ixNet getList $stack field ] {
                     if { [ regexp precedence $filed ] } {
@@ -3174,72 +3287,91 @@ body Traffic::config { args  } {
 							if { [llength $precedence] == 1 } {
 								ixNet setA $filed -startValue $precedence
 								ixNet setA $filed -singleValue $precedence
+								ixNet commit
 							} else {
 								ixNet setA $filed -valueList $precedence
+								ixNet commit
 							}
                         }
                         if { [ info exists precedence_fullmesh ] } {
                             ixNet setA $filed -fullMesh $precedence_fullmesh
+							ixNet commit
                         }
                         if { [ info exists precedence_mode ] } {
                             ixNet setA $filed -valueType $precedence_mode
+							ixNet commit
                         }
                         if { [ info exists precedence_num ] } {
                             ixNet setA $filed -countValue $precedence_num
+							ixNet commit
                         }
                         if { [ info exists precedence_step ] } {
                             ixNet setA $filed -stepValue $precedence_step
+							ixNet commit
                         }
                     }
                 }
             
             } elseif { [ regexp vlan $stack ] } {
+				Deputs "waseem etst9"
 				foreach filed [ ixNet getList $stack field ] {
 					 if { [ regexp -nocase "vlanUserPriority" $filed ] } {
 						if { [ info exists vlan_priority ] } {
 							if { [llength $vlan_priority] == 1 } {
 								ixNet setA $filed -startValue $vlan_priority
 								ixNet setA $filed -singleValue $vlan_priority
+								ixNet commit
 							} else {
 								ixNet setA $filed -valueList $vlan_priority
 							}
 						}
 						if { [ info exists vlan_priority_fullmesh ] } {
 							ixNet setA $filed -fullMesh $vlan_priority_fullmesh
+							ixNet commit
 						}
 						if { [ info exists vlan_priority_mode ] } {
 							ixNet setA $filed -valueType $vlan_priority_mode
+							ixNet commit
 						}
 						if { [ info exists vlan_priority_num ] } {
 							ixNet setA $filed -countValue $vlan_priority_num
+							ixNet commit
 						}
 						if { [ info exists vlan_priority_step ] } {
 							ixNet setA $filed -stepValue $vlan_priority_step
+							ixNet commit
 						}
 					}
 				}					
 			} elseif { [ regexp mpls $stack ] } {
+				Deputs "Waseem etst8"
 				foreach filed [ ixNet getList $stack field ] {
 					 if { [ regexp -nocase "mpls.label.experimental" $filed ] } {
 						if { [ info exists mpls_exp ] } {
 							if { [llength $mpls_exp] == 1 } {
 								ixNet setA $filed -startValue $mpls_exp
 								ixNet setA $filed -singleValue $mpls_exp
+								ixNet commit
 							} else {
 								ixNet setA $filed -valueList $mpls_exp
+								ixNet commit
 							}
 						}
 						if { [ info exists mpls_exp_fullmesh ] } {
 							ixNet setA $filed -fullMesh $mpls_exp_fullmesh
+							ixNet commit
 						}
 						if { [ info exists mpls_exp_mode ] } {
 							ixNet setA $filed -valueType $mpls_exp_mode
+							ixNet commit
 						}
 						if { [ info exists mpls_exp_num ] } {
 							ixNet setA $filed -countValue $mpls_exp_num
+							ixNet commit
 						}
 						if { [ info exists mpls_exp_step ] } {
 							ixNet setA $filed -stepValue $mpls_exp_step
+							ixNet commit
 						}
 					}
 				}					
@@ -3247,7 +3379,7 @@ body Traffic::config { args  } {
         }
         ixNet commit
     }
-
+    
     set modifyMode 1
     
     return [GetStandardReturnHeader]
@@ -3255,6 +3387,8 @@ body Traffic::config { args  } {
 }
 
 body Traffic::search_min_frame_size_by_load {} {
+	Deputs "waseem search_min"
+	debug 1
     set iteration 1
     set iterationResult false
     while { 1 } {
@@ -12307,7 +12441,7 @@ body FipVlanResHdr::config { args } {
 
 # FipDesc
 class FipDesc {
-	inherit NetObject
+	inherit NetNgpfObject
 	
 	public variable type
 	public variable len

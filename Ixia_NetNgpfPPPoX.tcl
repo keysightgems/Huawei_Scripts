@@ -9,33 +9,26 @@
 # Version 1.1
 #       2. add unconfig
 
-
 class PppoeHost {
-    inherit ProtocolStackObject
-    
-    #public variable type
-	public variable optionSet
-	public variable rangeStats
-	public variable hostCnt
-	public variable hPppox
-     
+    inherit ProtocolNgpfStackObject 
+	public variable hPppox   
+    public variable sg_pppoxEndpoint
     
     constructor { port { onStack null } { hPppoe null } } { chain $port $onStack $hPppoe } {
         set tag "PppoeHost::constructor [info script]"
         Deputs "----- TAG: $tag -----"
         global LoadConfigMode
-        
+		        
         if { $hPppoe == "null" && $LoadConfigMode == 1  } {
             set hPppoe [GetObjNameFromString $this "null"]
-            puts "hPppoe: $hPppoe"
         }
         
         if { $hPppoe != "null" } {
-            set eth_hnd [GetValidHandleObj "pppoe_host" $hPppoe $hPort]
+            set eth_hnd [GetValidNgpfHandleObj "pppoe_host" $hPppoe $hPort]
             if { [llength $eth_hnd] == 2 } {
                 set handle [lindex $eth_hnd 1]
                 set hPppox [lindex $eth_hnd 0]
-                set handleName [ ixNet getA $handle/pppoxRange -name ]
+                set handleName [ ixNet getA $handle -name ]
             }
         }
         
@@ -46,163 +39,176 @@ class PppoeHost {
     }
 	method reborn { { onStack null } } {}
 	method config { args } {}
-	method connect { } { start }
-	method disconnect { } { stop }
+	method connect { } { 
+   
+        set tag "body PppoeHost::connect [info script]"
+        Deputs "----- TAG: $tag -----"
+		start
+		return [ GetStandardReturnHeader ]	
+	}
+	
+	method disconnect { } { 
+        set tag "body PppoeHost::disconnect [info script]"
+        Deputs "----- TAG: $tag -----"
+        stop 
+        ixNet exec stop $stack 		
+		return [ GetStandardReturnHeader ]	
+	 }
     method abort { } { 
         set tag "body PppoeHost::abort [info script]"
-    Deputs "----- TAG: $tag -----"
-        ixNet exec abort $hPppox
-      
+        Deputs "----- TAG: $tag -----"
+        ixNet exec restartDown $sg_pppoxEndpoint      
         return [GetStandardReturnHeader]
     }
 	method get_summary_stats {} {}
     method unconfig {} {
         set tag "body PppoeHost::unconfig [info script]"
 		Deputs "----- TAG: $tag -----"		
-		catch {
-		    
-			# set ptemp [ixNet getL $hPort/protocols/bgp neighborRange]
-			# Deputs "$ptemp"
-			# if {[llength $ptemp] == 1 } {
-			    # set temphandle $hPort
-			    # chain
-			    # Deputs "disable $temphandle bgp protocol"
-				# ixNet setA $temphandle/protocols/bgp -enabled false
-				# ixNet commit
-			# } else {
-			    # chain
-			# }
-            chain
-            if {[ixNet getL $hPppox range] == ""} {
-                ixNet remove $stack
-                ixNet commit
-            }
-            
+		catch {	
+		    chain		
+            ixNet remove $sg_pppoxEndpoint
+			ixNet commit
+
 		}
     }
     method igmp_over_pppoe {} {}
 	method wait_connect_complete { args } {}
 	method wait_disconnect_complete {} {}
-    method CreatePPPoEPerSessionView {} {
-        set tag "body PppoeHost::CreateDhcpPerSessionView [info script]"
+    
+	method CreatePPPoEPerSessionView {} {
+
+        set tag "body PppoeHost::CreatePPPoEPerSessionView [info script]"
 		Deputs "----- TAG: $tag -----"
-        set root [ixNet getRoot]
-        set customView          [ ixNet add $root/statistics view ]
-        ixNet setM  $customView -caption "dhcpPerSessionView" -type layer23ProtocolStack -visible true
+		set type "Per Session"
+        set protocol "PPPoX Client"
+		set r_no [expr {int(rand()*100000)}]
+		set root [ixNet getRoot]
+		
+		set customView [ixNet add $root/statistics view]
+        ixNet setMultiAttribute $customView -pageTimeout 25  -type layer23NextGenProtocol -caption "PPPoXSessionPerSession_$r_no"  -visible true -autoUpdate true -viewCategory NextGenProtocol
         ixNet commit
-        set customView          [ ixNet remapIds $customView ]
-        Deputs "view:$customView"
-        set availableFilter     [ ixNet getList $customView availableProtocolStackFilter ]
-        Deputs "available filter:$availableFilter"
-        set filter              [ ixNet getList $customView layer23ProtocolStackFilter ]
-        Deputs "filter:$filter"
-        Deputs "handle:$handle"
-        set pppoxRange [ixNet getList $handle pppoxRange]
-        Deputs "pppoxRange:$pppoxRange"
-        set rangeName [ ixNet getA $pppoxRange -name ]
-        Deputs "range name:$rangeName"
-        foreach afil $availableFilter {
-	    Deputs "$afil"
-            if { [ regexp $rangeName $afil ] } {
-                set stackFilter $afil
-            }
-        }
-        Deputs "stack filter:$stackFilter"
-        ixNet setM $filter -drilldownType perSession -protocolStackFilterId [ list $stackFilter ]
+        set customView [lindex [ixNet remapIds $customView] 0]
+
+        set advCv [ixNet add $customView "advancedCVFilters"]
+	
+        ixNet setMultiAttribute $advCv -grouping \"$type\"  -protocol \{$protocol\} -availableFilterOptions \{$type\}    -sortingStats {}
         ixNet commit
-        set srtStat [lindex [ixNet getF $customView statistic -caption {Session Name}] 0]
-        ixNet setA $filter -sortAscending true -sortingStatistic $srtStat
+        set advCv [lindex [ixNet remapIds $advCv] 0]
+
+        set ngp [ixNet add $customView layer23NextGenProtocolFilter]
+        ixNet setMultiAttribute $ngp -advancedFilterName \"No\ Filter\"   -advancedCVFilter $advCv -protocolFilterIds [list ] -portFilterIds [list ]
         ixNet commit
-        foreach s [ixNet getL $customView statistic] {
-            ixNet setA $s -enabled true
+        set ngp [lindex [ixNet remapIds $ngp] 0]
+
+        set stats [ixNet getList $customView statistic]
+		
+        foreach stat $stats {
+            ixNet setA $stat -scaleFactor 1
+            ixNet setA $stat -enabled true
+            ixNet setA $stat -aggregationType first
+            ixNet commit
         }
         ixNet setA $customView -enabled true
         ixNet commit
-        return $customView
-    }
-    
-    
+        ixNet execute refresh $customView
+        ixNet exec applyOnTheFly  ::ixNet::OBJ-/globals/topology
+		return $customView
+	}
 }
 body PppoeHost::igmp_over_pppoe {} {
     set tag "body PppoeHost::igmp_over_pppoe [info script]"
     Deputs "----- TAG: $tag -----"
     set igmp_name igmp_[clock seconds]
+
     IgmpOverPppoeHost $igmp_name $this
-    
     return PppoeHost::$igmp_name
 }
 body PppoeHost::wait_disconnect_complete {} {
     set tag "body PppoeHost::wait_disconnect_complete [info script]"
     Deputs "----- TAG: $tag -----"
-
     set timeout 300
-    return [GetStandardReturnHeader]
+	return [GetStandardReturnHeader]
 }
 
 body PppoeHost::reborn { { onStack null } } {
     
 	set tag "body PppoeHost::reborn [info script]"
 	Deputs "----- TAG: $tag -----"	
-    
     set flag 1
+	
     if { [ info exists hPort ] == 0 || $hPort == "" } {
         set flag 1
     } else {
-	    set sg_ethernet_list [ixNet getL $hPort/protocolStack ethernet]
-        foreach sg_ethernet $sg_ethernet_list {
-            set sg_pppoxEndpoint [ixNet getL $sg_ethernet pppoxEndpoint]
-            if {$sg_pppoxEndpoint != ""} {
-                set flag 0
-                set stack $sg_ethernet
-               
-                break
+		set pppoxObj ""
+        set topoObjList [ixNet getL [ixNet getRoot] topology]
+        set vportList [ixNet getL [ixNet getRoot] vport]
+        if {[llength $topoObjList] != [llength $vportList]} {
+            foreach topoObj $topoObjList {
+                set vportObj [ixNet getA $topoObj -vports]
+				foreach vport $vportList {
+					if {$vportObj != $vport && $vport == $hPort} {	
+                        # set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
+						# set deviceGroupObj [ixNet add $topoObj deviceGroup]
+						# set deviceGroupObj [ ixNet remapIds $deviceGroupObj ]
+						# set sg_ethernet [ixNet add $deviceGroupObj ethernet]
+						# ixNet commit
+						# set sg_ethernet [lindex [ixNet remapIds $sg_ethernet] 0]
+                        set sg_ethernet [CreateProtoHandleFromRoot $hPort]
+						set stack $sg_ethernet	
+						set flag 0
+                    } 
+				break  
+                }
+		    }
+		}
+		set topoObjList [ixNet getL [ixNet getRoot] topology]
+
+		if { [ llength $topoObjList ] == 0 } {
+		    set sg_pppoxEndpoint [CreateProtoHandleFromRoot $hPort pppoxclient]
+            set stack [GetDependentNgpfProtocolHandle $sg_pppoxEndpoint ethernet]
+			set handle $sg_pppoxEndpoint 
+            set flag 0
+        } elseif { [ llength $topoObjList ] != 0 } {
+            foreach topoObj $topoObjList {		    
+                set vportObj [ixNet getA $topoObj -vports]
+                Deputs "Checking vport value $vportObj and hPort value $hPort"
+			    if {$vportObj == $hPort } {
+                    set deviceGroupList [ixNet getL $topoObj deviceGroup]
+                    foreach deviceGroupObj $deviceGroupList {
+                        set ethernetList [ixNet getL $deviceGroupObj ethernet]
+                        foreach sg_ethernet $ethernetList {
+							set sg_pppoxEndpoint [ixNet add $sg_ethernet pppoxclient]
+							ixNet commit
+	                        set sg_pppoxEndpoint [lindex [ixNet remapIds $sg_pppoxEndpoint] 0]
+	                        set handle $sg_pppoxEndpoint								
+							set stack $sg_ethernet
+							set flag 0
+	                    }
+					}
+                } 
             }
         }
     }
-	
+
 	if { $flag } {
-		chain
-		set sg_ethernet $stack
-	}
-    Deputs "stack: $stack"
-	set sg_ethernet $stack
-    #-- add pppox endpoint stack
-    if { [llength [ixNet getL $stack pppoxEndpoint]] > 0 } {
-        set sg_pppoxEndpoint [lindex [ixNet getL $stack pppoxEndpoint] 0]
-    } else {
-        set sg_pppoxEndpoint [ixNet add $sg_ethernet pppoxEndpoint]
-    }
-    Deputs "sg_pppoxEndpoint: $sg_pppoxEndpoint"
-    # ixNet setA $sg_pppoxEndpoint -name $this
-    # ixNet commit
-    set sg_pppoxEndpoint [lindex [ixNet remapIds $sg_pppoxEndpoint] 0]
-    set hPppox $sg_pppoxEndpoint
-    
-    #-- add range
-    set sg_range [ixNet add $sg_pppoxEndpoint range]
-    ixNet setMultiAttrs $sg_range/macRange \
-     -enabled True 
-    
-    ixNet setMultiAttrs $sg_range/vlanRange \
-     -enabled False \
-    
-    ixNet setMultiAttrs $sg_range/pppoxRange \
-     -enabled True \
-     -name $this   \
-     -numSessions 1
-    
-    ixNet commit
-    set sg_range [ixNet remapIds $sg_range]
-    
-    set handle $sg_range
-    #set trafficObj 
+    	chain
+		set handle $stack
 	
-	#disable all the interface defined on port
-	foreach int [ ixNet getL $hPort interface ] {
-		ixNet setA $int -enabled false
+	    #-- add pppox endpoint stack
+	    if { [llength [ixNet getL $stack pppoxclient]] > 0 } {
+            set sg_pppoxEndpoint [lindex [ixNet getL $stack pppoxclient] 0]
+        } else {
+            set sg_pppoxEndpoint [ixNet add $stack pppoxclient]
+			ixNet commit
+		    set sg_pppoxEndpoint [ixNet remapIds $sg_pppoxEndpoint]	
+        }
+		set handle $sg_pppoxEndpoint
 	}
-	ixNet commit
+	
+    #ixNet setA $sg_pppoxEndpoint -name $this
+    ixNet commit
 }
+	
 
 body PppoeHost::config { args } {
     global errorInfo
@@ -215,7 +221,6 @@ body PppoeHost::config { args } {
 	
     set ENcp       [ list ipv4 ipv6 ipv4v6 ]
     set EAuth      [ list none auto chap_md5 pap ]
-
 	#param collection
 	Deputs "Args:$args "
     foreach { key value } $args {
@@ -269,185 +274,154 @@ body PppoeHost::config { args } {
 			}
         }
     }
-	
-	if { [ info exists count ] } {
-		ixNet setMultiAttrs $handle/pppoxRange \
-		 -numSessions $count
-	}
-	
 	if { [ info exists mru_size ] } {
-		ixNet setMultiAttrs $handle/pppoxRange \
-		 -mtu $mru_size
+		# ixNet setA [ixNet getA $handle -mtu]/singleValue -value $mru_size
+        set pattern  [ixNet getA [ixNet getA $handle -mtu] -pattern]
+        SetMultiValues $handle "-mtu" $pattern $mru_size
 	}
 	
 	if { [ info exists ipcp_encap ] } {
-		switch $ipcp_encap {
+		    switch $ipcp_encap {
 			ipv4 {
-				set ipcp_encap IPv4
+				set ipcp_encap ipv4
 			}
 			ipv6 {
-				set ipcp_encap IPv6
+				set ipcp_encap ipv6
 			}
 			ipv4v6 {
-				set ipcp_encap DualStack
+				set ipcp_encap dual_stack
 			}
 		}
-		ixNet setA $handle/pppoxRange -ncpType $ipcp_encap
+		# ixNet setA [ixNet getA $handle -ncpType]/singleValue -value $ipcp_encap
+        set pattern  [ixNet getA [ixNet getA $handle -ncpType] -pattern]
+        SetMultiValues $handle "-ncpType" $pattern $ipcp_encap
+		
+	    }
+	
+
+	if { [ info exists count ] } {
+		ixNet setMultiAttrs $handle  -multiplier $count
 	}
 	
 	if { [ info exists authentication ] } {
-	
 		switch $authentication {
 			auto {
-				set authentication papOrChap
+				set authentication pap_or_chap
                 if { [ info exists user_name ] } {
-					ixNet setMultiAttrs $handle/pppoxRange \
-					 -chapName $user_name  \
-					 -papUser $user_name
+				    # ixNet setA [ixNet getA $handle -chapName]/singleValue -value $user_name
+        set pattern  [ixNet getA [ixNet getA $handle -chapName] -pattern]
+        SetMultiValues $handle "-chapName" $pattern $user_name
+					# ixNet setA [ixNet getA $handle -papUser]/singleValue -value $user_name
+        set pattern  [ixNet getA [ixNet getA $handle -papUser] -pattern]
+        SetMultiValues $handle "-papUser" $pattern $user_name
 				}
 				if { [ info exists password ] } {
-					ixNet setMultiAttrs $handle/pppoxRange \
-					 -chapSecret $password  \
-					 -papPassword $password
+				    # ixNet setA [ixNet getA $handle -chapSecret]/singleValue -value $password
+        set pattern  [ixNet getA [ixNet getA $handle -chapSecret] -pattern]
+        SetMultiValues $handle "-chapSecret" $pattern $password
+					# ixNet setA [ixNet getA $handle -papPassword]/singleValue -value $password
+        set pattern  [ixNet getA [ixNet getA $handle -papPassword] -pattern]
+        SetMultiValues $handle "-papPassword" $pattern $password
 				}
 			}
 			chap_md5 {
 				set authentication chap
 				if { [ info exists user_name ] } {
-					ixNet setMultiAttrs $handle/pppoxRange \
-					 -chapName $user_name
+				    # ixNet setA [ixNet getA $handle -chapName]/singleValue -value $user_name
+        set pattern  [ixNet getA [ixNet getA $handle -chapName] -pattern]
+        SetMultiValues $handle "-chapName" $pattern $user_name
 				}
 				if { [ info exists password ] } {
-					ixNet setMultiAttrs $handle/pppoxRange \
-					 -chapSecret $password
+				    # ixNet setA [ixNet getA $handle -chapSecret]/singleValue -value $password
+        set pattern  [ixNet getA [ixNet getA $handle -chapSecret] -pattern]
+        SetMultiValues $handle "-chapSecret" $pattern $password
 				}			
 			}
             pap {
 				set authentication pap
 				if { [ info exists user_name ] } {
-					ixNet setMultiAttrs $handle/pppoxRange \
-					 -papUser $user_name
+					# ixNet setA [ixNet getA $handle -papUser]/singleValue -value $user_name
+        set pattern  [ixNet getA [ixNet getA $handle -papUser] -pattern]
+        SetMultiValues $handle "-papUser" $pattern $user_name
+
 				}
 				if { [ info exists password ] } {
-					ixNet setMultiAttrs $handle/pppoxRange \
-					 -papPassword $password
-				}			
+					# ixNet setA [ixNet getA $handle -papPassword]/singleValue -value $password
+        set pattern  [ixNet getA [ixNet getA $handle -papPassword] -pattern]
+        SetMultiValues $handle "-papPassword" $pattern $password
+
+				}
+            }				
+
+            none {
+				set authentication none
+				
 			}
 			
 		}
-		ixNet setA $handle/pppoxRange -authType $authentication
+		# ixNet setA [ixNet getA $handle -authType]/singleValue -value $authentication
+        set pattern  [ixNet getA [ixNet getA $handle -authType] -pattern]
+        SetMultiValues $handle "-authType" $pattern $authentication
 	}
 	
 	if { [ info exists enable_domain ] } {
-		
-		ixNet setA $handle/pppoxRange -enableDomainGroups $enable_domain
+		# ixNet setA [ixNet getA $handle -enableDomainGroups]/singleValue -value $enable_domain
+        set pattern  [ixNet getA [ixNet getA $handle -enableDomainGroups] -pattern]
+        SetMultiValues $handle "-enableDomainGroups" $pattern $enable_domain
 	}
 	
 	if { [ info exists domain ] } {
-	
-		foreach domainGroup [ ixNet getL $handle/pppoxRange domainGroup ] {
-			ixNet remove $domainGroup
-		}
-		
-		foreach domainGroup $domain {
-			set dg [ixNet add $handle/pppoxRange domainGroup ]
-			ixNet setA $dg -baseName $domainGroup
-			ixNet commit
-		}
+	    # ixNet setA [ixNet getA $handle -domainList]/string -pattern $domain		
+        set pattern  [ixNet getA [ixNet getA $handle -domainList] -pattern]
+        SetMultiValues $handle "-domainList" $pattern $domain
 	}
-
+    #set sg_pppoxEndpoint $handle
 	ixNet commit
+	ixNet exec applyOnTheFly  ::ixNet::OBJ-/globals/topology
 	return [GetStandardReturnHeader]
+	
 }
 
 body PppoeHost::get_summary_stats {} {
     set tag "body PppoeHost::get_summary_stats [info script]"
     Deputs "----- TAG: $tag -----"
-            
-    # Í³¼ÆÏî
-    # attempted_count
-    # avg_success_transaction_count
-    # connected_success_count
-    # disconnected_success_count
-    # failed_connect_count
-    # failed_disconnect_count
-    # max_setup_time
-    # min_setup_time
-    # retry_count
-    # rx_chap_count
-    # rx_ipcp_count
-    # rx_ipv6cp_count
-    # rx_lcp_config_ack_count
-    # rx_lcp_config_nak_count
-    # rx_lcp_config_reject_count
-    # rx_lcp_config_request_count
-    # rx_lcp_echo_reply_count
-    # rx_lcp_echo_request_count
-    # rx_lcp_term_ack_count
-    # rx_lcp_term_request_count
-    # rx_pap_count
-    # hosts
-    # success_setup_rate
-    # hosts_up
-    # tx_chap_count
-    # tx_ipcp_count
-    # tx_ipv6cp_count
-    # tx_lcp_config_ack_count
-    # tx_lcp_config_nak_count
-    # tx_lcp_config_reject_count
-    # tx_lcp_config_request_count
-    # tx_lcp_echo_reply_count
-    # tx_lcp_echo_request_count
-    # tx_lcp_term_ack_count
-    # tx_lcp_term_request_count
-    # tx_pap_count
-
+ 	
+	puts "Sleep 30sec for protocols to start"
+    after 30000
+	
     set root [ixNet getRoot]
-	set view {::ixNet::OBJ-/statistics/view:"PPP General Statistics"}
-    # set view  [ ixNet getF $root/statistics view -caption "Port Statistics" ]
+	set view {::ixNet::OBJ-/statistics/view:"PPPoX Client Per Port"}
     Deputs "view:$view"
     set captionList             [ ixNet getA $view/page -columnCaptions ]
     Deputs "caption list:$captionList"
-	set port_name				[ lsearch -exact $captionList {Stat Name} ]
-    set attempted_count          [ lsearch -exact $captionList {Sessions Initiated} ]
-    set connected_success_count          [ lsearch -exact $captionList {Sessions Succeeded} ]
+	set port_name				[ lsearch -exact $captionList {Port} ]
+    set attempted_count_up          [ lsearch -exact $captionList {Sessions Up} ]
+	set connected_down_count          [ lsearch -exact $captionList {Sessions Down} ]
     set ret [ GetStandardReturnHeader ]
 	
     set stats [ ixNet getA $view/page -rowValues ]
     Deputs "stats:$stats"
+	#set connectionInfo [ ixNet getA $hPort -connectionInfo ]
+	
+    #Deputs "connectionInfo :$connectionInfo"
+    #regexp -nocase {chassis=\"([0-9\.]+)\" card=\"([0-9\.]+)\" port=\"([0-9\.]+)\"} $connectionInfo match chassis card port
+    #Deputs "chas:$chassis card:$card port$port"
 
-    set connectionInfo [ ixNet getA $hPort -connectionInfo ]
-    Deputs "connectionInfo :$connectionInfo"
-    regexp -nocase {chassis=\"([0-9\.]+)\" card=\"([0-9\.]+)\" port=\"([0-9\.]+)\"} $connectionInfo match chassis card port
-    Deputs "chas:$chassis card:$card port$port"
-
-    foreach row $stats {    
+    foreach row $stats {  
         eval {set row} $row
-        Deputs "row:$row"
-        Deputs "portname:[ lindex $row $port_name ]"
-		if { [ string length $card ] == 1 } {
-			set card "0$card"
+        set rowPortName [ lindex $row $port_name ]
+		set portName [ ixNet getA $hPort -name ]
+			if { [ regexp $portName $rowPortName ] } {
+				set statsItem   "attempted_count_up"
+				set statsVal    [ lindex $row $attempted_count_up ]
+				Deputs "stats val:$statsVal"
+                set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]                
+                set statsItem   "connected_down_count"
+				set statsVal    [ lindex $row $connected_down_count ]
+				Deputs "stats val:$statsVal"
+				set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+                Deputs "ret:$ret"
 		}
-		if { [ string length $port ] == 1 } {
-			set port "0$port"
-		}
-		if { "${chassis}/Card${card}/Port${port}" != [ lindex $row $port_name ] } {
-			continue
-		}
-
-        set statsItem   "attempted_count"
-        set statsVal    [ lindex $row $attempted_count ]
-        Deputs "stats val:$statsVal"
-        set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-          
-              
-        set statsItem   "connected_success_count"
-        set statsVal    [ lindex $row $connected_success_count ]
-        Deputs "stats val:$statsVal"
-        set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-			  
-
-        Deputs "ret:$ret"
 
     }
         
@@ -483,12 +457,11 @@ body PppoeHost::wait_connect_complete { args } {
 		if { [ expr $click - $startClick ] >= $timeout } {
 			return [ GetErrorReturnHeader "timeout" ]
 		}
-		
 		set stats [ get_summary_stats ]
-		set initStats [ GetStatsFromReturn $stats attempted_count ]
-		set succStats [ GetStatsFromReturn $stats connected_success_count ]
+		set initStats [ GetStatsFromReturn $stats attempted_count_up ]
+		set succStats [ GetStatsFromReturn $stats connected_down_count ]
         Deputs "initStats:$initStats == succStats:$succStats ?"		
-		if { $succStats != "" && $succStats >= $initStats && $initStats > 0 } {
+		if { $succStats != "" && $initStats >= $succStats && $initStats > 0 } {
 			break	
 		}
 		
@@ -497,203 +470,3 @@ body PppoeHost::wait_connect_complete { args } {
 	
 	return [GetStandardReturnHeader]
 }
-# =============
-# ethernet
-# =============
-# Child Lists:
-	# dcbxEndpoint (kList : add, remove, getList)
-	# dhcpEndpoint (kList : add, remove, getList)
-	# dhcpServerEndpoint (kList : add, remove, getList)
-	# dot1x (kList : add, remove, getList)
-	# emulatedRouter (kList : add, remove, getList)
-	# emulatedRouterEndpoint (kList : add, remove, getList)
-	# esmc (kList : add, remove, getList)
-	# fcoeClientEndpoint (kList : add, remove, getList)
-	# fcoeFwdEndpoint (kList : add, remove, getList)
-	# ip (kList : add, remove, getList)
-	# ipEndpoint (kList : add, remove, getList)
-	# pppox (kList : add, remove, getList)
-	# pppoxEndpoint (kList : add, remove, getList)
-	# ptp (kList : add, remove, getList)
-	# vepaEndpoint (kList : add, remove, getList)
-	# vicClient (kList : add, remove, getList)
-# Attributes:
-	# -name (readOnly=False, type=(kString))
-	# -objectId (readOnly=True, type=(kString))
-# Execs:
-	# customProtocolStack((kArray)[(kObjref)=/vport/protocolStack/...],(kArray)[(kString)],(kEnumValue)=kAppend,kMerge,kOverwrite)
-	# disableProtocolStack((kObjref)=/vport/protocolStack/...,(kString))
-	# enableProtocolStack((kObjref)=/vport/protocolStack/...,(kString))
-
-# =============
-# pppoxEndpoint
-# =============
-# Child Lists:
-	# ancp (kList : add, remove, getList)
-	# dhcp2v6Client (kList : add, remove, getList)
-	# dhcpv6Client (kList : add, remove, getList)
-	# dhcpv6Server (kList : add, remove, getList)
-	# igmpMld (kList : add, remove, getList)
-	# igmpQuerier (kList : add, remove, getList)
-	# iptv (kList : add, remove, getList)
-	# range (kList : add, remove, getList)
-# Attributes:
-	# -name (readOnly=False, type=(kString))
-	# -objectId (readOnly=True, type=(kString))
-	# -perSessionStats (readOnly=True, type=(kArray)[(kString)])
-# Execs:
-	# customProtocolStack((kArray)[(kObjref)=/vport/protocolStack/...],(kArray)[(kString)],(kEnumValue)=kAppend,kMerge,kOverwrite)
-	# disableProtocolStack((kObjref)=/vport/protocolStack/...,(kString))
-	# enableProtocolStack((kObjref)=/vport/protocolStack/...,(kString))
-	# pppoxCancel((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range])
-	# pppoxClearStats((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppoxEndpoint])
-	# pppoxConfigure((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range])
-	# pppoxDeconfigure((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range])
-	# pppoxNegotiateTo((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppoxEndpoint],(kInteger))
-	# pppoxNegotiateTo((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppoxEndpoint],(kInteger),(kEnumValue)=async,sync)
-	# pppoxPause((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range])
-	# pppoxPause((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range],(kEnumValue)=async,sync)
-	# pppoxResume((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range])
-	# pppoxResume((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range],(kEnumValue)=async,sync)
-	# pppoxRetry((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range])
-	# pppoxRetry((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range],(kEnumValue)=async,sync)
-	# pppoxSendNdpRs((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range],(kInteger))
-	# pppoxSendNdpRs((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range],(kInteger),(kEnumValue)=async,sync)
-	# pppoxStart((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range])
-	# pppoxStart((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range],(kEnumValue)=async,sync)
-	# pppoxStop((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range])
-	# pppoxStop((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range],(kEnumValue)=async,sync)
-
-# =============
-# pppoxEndpoint.range
-# =============
-	# Child Lists:
-	# ancpRange (kOptional : getList)
-	# dhcpv6ClientRange (kOptional : getList)
-	# dhcpv6PdClientRange (kOptional : getList)
-	# dhcpv6ServerRange (kOptional : getList)
-	# dot1xRange (kOptional : getList)
-	# esmcRange (kOptional : getList)
-	# igmpMldRange (kOptional : getList)
-	# igmpQuerierRange (kOptional : getList)
-	# iptvRange (kOptional : getList)
-	# macRange (kRequired : getList)
-	# pppoxRange (kRequired : getList)
-	# ptpRangeOverMac (kOptional : getList)
-	# vicClientRange (kOptional : getList)
-	# vlanRange (kRequired : getList)
-# Execs:
-	# pppoxCancel((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range])
-	# pppoxConfigure((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range])
-	# pppoxDeconfigure((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range])
-	# pppoxPause((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range])
-	# pppoxPause((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range],(kEnumValue)=async,sync)
-	# pppoxResume((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range])
-	# pppoxResume((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range],(kEnumValue)=async,sync)
-	# pppoxRetry((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range])
-	# pppoxRetry((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range],(kEnumValue)=async,sync)
-	# pppoxSendNdpRs((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range],(kInteger))
-	# pppoxSendNdpRs((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range],(kInteger),(kEnumValue)=async,sync)
-	# pppoxStart((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range])
-	# pppoxStart((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range],(kEnumValue)=async,sync)
-	# pppoxStop((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range])
-	# pppoxStop((kArray)[(kObjref)=/vport/protocolStack/atm/pppox,/vport/protocolStack/atm/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/atm/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/atm/pppoxEndpoint,/vport/protocolStack/atm/pppoxEndpoint/range,/vport/protocolStack/ethernet/pppox,/vport/protocolStack/ethernet/pppox/dhcpoPppClientEndpoint/range,/vport/protocolStack/ethernet/pppox/dhcpoPppServerEndpoint/range,/vport/protocolStack/ethernet/pppoxEndpoint,/vport/protocolStack/ethernet/pppoxEndpoint/range],(kEnumValue)=async,sync)
-
-# =============
-# pppoxEndpoint.range.pppoxRange
-# =============
-# Child Lists:
-	# acMac (kList : add, remove, getList)
-	# acName (kList : add, remove, getList)
-	# domainGroup (kList : add, remove, getList)
-# Attributes:
-	# -acName (readOnly=False, type=(kString))
-	# -acOptions (readOnly=False, type=(kString))
-	# -actualRateDownstream (readOnly=False, type=(kInteger64))
-	# -actualRateUpstream (readOnly=False, type=(kInteger64))
-	# -agentCircuitId (readOnly=False, type=(kString))
-	# -agentRemoteId (readOnly=False, type=(kString))
-	# -authOptions (readOnly=False, type=(kString))
-	# -authRetries (readOnly=False, type=(kInteger64))
-	# -authTimeout (readOnly=False, type=(kInteger64))
-	# -authType (readOnly=False, type=(kString))
-	# -chapName (readOnly=False, type=(kString))
-	# -chapSecret (readOnly=False, type=(kString))
-	# -clientBaseIid (readOnly=False, type=(kString))
-	# -clientBaseIp (readOnly=False, type=(kString))
-	# -clientDnsOptions (readOnly=False, type=(kString))
-	# -clientIidIncr (readOnly=False, type=(kInteger64))
-	# -clientIpIncr (readOnly=False, type=(kString))
-	# -clientNetmask (readOnly=False, type=(kString))
-	# -clientNetmaskOptions (readOnly=False, type=(kString))
-	# -clientPrimaryDnsAddress (readOnly=False, type=(kString))
-	# -clientSecondaryDnsAddress (readOnly=False, type=(kString))
-	# -clientSignalIwf (readOnly=False, type=(kBool))
-	# -clientSignalLoopChar (readOnly=False, type=(kBool))
-	# -clientSignalLoopEncapsulation (readOnly=False, type=(kBool))
-	# -clientSignalLoopId (readOnly=False, type=(kBool))
-	# -dataLink (readOnly=False, type=(kString))
-	# -dnsServerList (readOnly=False, type=(kString))
-	# -domainList (readOnly=False, type=(kString))
-	# -echoReqInterval (readOnly=False, type=(kInteger64))
-	# -enabled (readOnly=False, type=(kBool))
-	# -enableDnsRa (readOnly=False, type=(kBool))
-	# -enableDomainGroups (readOnly=False, type=(kBool))
-	# -enableEchoReq (readOnly=False, type=(kBool))
-	# -enableEchoRsp (readOnly=False, type=(kBool))
-	# -enableIncludeTagInPadi (readOnly=False, type=(kBool), deprecated)
-	# -enableIncludeTagInPado (readOnly=False, type=(kBool), deprecated)
-	# -enableIncludeTagInPadr (readOnly=False, type=(kBool), deprecated)
-	# -enableIncludeTagInPads (readOnly=False, type=(kBool), deprecated)
-	# -enableIntermediateAgentTags (readOnly=False, type=(kBool), deprecated)
-	# -enableMruNegotiation (readOnly=False, type=(kBool))
-	# -enablePasswordCheck (readOnly=False, type=(kBool))
-	# -enableRedial (readOnly=False, type=(kBool))
-	# -encaps1 (readOnly=False, type=(kString))
-	# -encaps2 (readOnly=False, type=(kString))
-	# -ipv6AddrPrefixLen (readOnly=False, type=(kInteger64))
-	# -ipv6PoolPrefix (readOnly=False, type=(kString))
-	# -ipv6PoolPrefixLen (readOnly=False, type=(kInteger64))
-	# -lcpOptions (readOnly=False, type=(kString))
-	# -lcpRetries (readOnly=False, type=(kInteger64))
-	# -lcpTermRetries (readOnly=False, type=(kInteger64))
-	# -lcpTermTimeout (readOnly=False, type=(kInteger64))
-	# -lcpTimeout (readOnly=False, type=(kInteger64))
-	# -mtu (readOnly=False, type=(kInteger64))
-	# -name (readOnly=False, type=(kString))
-	# -ncpRetries (readOnly=False, type=(kInteger64))
-	# -ncpTimeout (readOnly=False, type=(kInteger64))
-	# -ncpType (readOnly=False, type=(kString))
-	# -numSessions (readOnly=False, type=(kInteger64))
-	# -objectId (readOnly=True, type=(kString))
-	# -padiRetries (readOnly=False, type=(kInteger64))
-	# -padiTimeout (readOnly=False, type=(kInteger64))
-	# -padrRetries (readOnly=False, type=(kInteger64))
-	# -padrTimeout (readOnly=False, type=(kInteger64))
-	# -papPassword (readOnly=False, type=(kString))
-	# -papUser (readOnly=False, type=(kString))
-	# -pppoeOptions (readOnly=False, type=(kString))
-	# -redialMax (readOnly=False, type=(kInteger64))
-	# -redialTimeout (readOnly=False, type=(kInteger64))
-	# -serverBaseIid (readOnly=False, type=(kString))
-	# -serverBaseIp (readOnly=False, type=(kString))
-	# -serverDnsOptions (readOnly=False, type=(kString))
-	# -serverIidIncr (readOnly=False, type=(kInteger64))
-	# -serverIpIncr (readOnly=False, type=(kString), deprecated)
-	# -serverNetmask (readOnly=False, type=(kString))
-	# -serverNetmaskOptions (readOnly=False, type=(kString))
-	# -serverPrimaryDnsAddress (readOnly=False, type=(kString))
-	# -serverSecondaryDnsAddress (readOnly=False, type=(kString))
-	# -serverSignalIwf (readOnly=False, type=(kBool))
-	# -serverSignalLoopChar (readOnly=False, type=(kBool))
-	# -serverSignalLoopEncapsulation (readOnly=False, type=(kBool))
-	# -serverSignalLoopId (readOnly=False, type=(kBool))
-	# -serviceName (readOnly=False, type=(kString))
-	# -serviceOptions (readOnly=False, type=(kString))
-	# -unlimitedRedialAttempts (readOnly=False, type=(kBool))
-	# -useMagic (readOnly=False, type=(kBool))
-# Execs:
-	# customProtocolStack((kArray)[(kObjref)=/vport/protocolStack/...],(kArray)[(kString)],(kEnumValue)=kAppend,kMerge,kOverwrite)
-	# disableProtocolStack((kObjref)=/vport/protocolStack/...,(kString))
-	# enableProtocolStack((kObjref)=/vport/protocolStack/...,(kString))
-

@@ -43,7 +43,7 @@
 
 class Capture {
     
-    inherit NetObject
+    inherit NetNgpfObject
     #--public method
     constructor { port } {
 		set tag "body Capture::ctor [info script]"
@@ -154,7 +154,7 @@ class Capture {
 
 		# Login before taking ownership
 		ixLogin $owner
-		# Take ownership of the ports we¡¯ll use
+		# Take ownership of the ports weï¿½ï¿½ll use
 		set portList [ list [ eval list $chasId $card $port ] ]
 Deputs "portList:$portList"		
 		#ixTakeOwnership $portList

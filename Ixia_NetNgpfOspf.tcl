@@ -15,7 +15,11 @@ class OspfSession {
 	public variable hNetworkRange
 	public variable hNetworkGroup
     public variable OspfVersion
-
+	public variable deviceHandle
+	public variable view
+    set devicehandle ""
+    global devicehandle
+	
     constructor { port { hOspfSession NULL } } {
 		global errNumber
 		
@@ -26,6 +30,7 @@ Deputs "----- TAG: $tag -----"
 		
 		set handle ""
 		set ospfRtHandle ""
+		set view ""
         
 		
 	}
@@ -50,14 +55,13 @@ Deputs "----- TAG: $tag -----"
 		set rb_interface [ ixNet getL $hPort interface ]
 	    Deputs "rb_interface is: $rb_interface"
 		array set interface [ list ]
-
 	}
 	
     method config { args } {}
 	method set_topo { args } {}
 	method unset_topo { args } {}
 	method advertise_topo {} {}
-	method withdraw_topo {} {}
+		method withdraw_topo {} {}
 	method flapping_topo { args } {}
 	method enable {} {
         set tag "body OspfSession::enable [info script]"
@@ -76,21 +80,24 @@ Deputs "----- TAG: $tag -----"
 	method generate_interface { args } {
 		set tag "body OspfSession::generate_interface [info script]"
 Deputs "----- TAG: $tag -----"
-Deputs "handle:$handle"		
-		foreach int $rb_interface {
-			if { [ ixNet getA $int -type ] == "routed" } {
-				continue
-				Deputs "inside:$int"	
-			}
-			set hInt [ ixNet add $handle interface ]
-			ixNet setM $hInt -interfaces $int -enabled True -connectedToDut True
-			
-			ixNet commit
-			set hInt [ ixNet remapIds $hInt ]
-			set interface($int) $hInt	
-			Deputs "hInt:$hInt"
-			Deputs "interface($int):$interface($int)"
-		}
+Deputs "handle:$handle"
+        # The below code not required for NGPF so commented
+        if {0} {
+            foreach int $rb_interface {
+                if { [ ixNet getA $int -type ] == "routed" } {
+                    continue
+                    Deputs "inside:$int"
+                }
+                set hInt [ ixNet add $handle interface ]
+                ixNet setM $hInt -interfaces $int -enabled True -connectedToDut True
+
+                ixNet commit
+                set hInt [ ixNet remapIds $hInt ]
+                set interface($int) $hInt
+                Deputs "hInt:$hInt"
+                Deputs "interface($int):$interface($int)"
+            }
+        }
 	}	
 }
 body OspfSession::config { args } {
@@ -275,8 +282,8 @@ body OspfSession::advertise_topo {} {
 
 	set tag "body OspfSession::advertise_topo [info script]"
 Deputs "----- TAG: $tag -----"
-    set deviceGroupObj [GetDependentNgpfProtocolHandle $handle "deviceGroup"]
-    foreach route [ ixNet getL $deviceGroupObj networkGroup ] {
+    set deviceGroupObj [$this cget -deviceHandle]
+	foreach route [ ixNet getL $deviceGroupObj networkGroup ] {
 	    ixNet setA [ixNet getA $route -enabled]/singleValue -value True
 	}
 
@@ -287,7 +294,7 @@ body OspfSession::withdraw_topo {} {
 
 	set tag "body OspfSession::withdraw_topo [info script]"
 Deputs "----- TAG: $tag -----"
-    set deviceGroupObj [GetDependentNgpfProtocolHandle $handle "deviceGroup"]
+    set deviceGroupObj [$this cget -deviceHandle]
     foreach route [ ixNet getL $deviceGroupObj networkGroup ] {
 	
 		ixNet setA [ixNet getA $route -enabled]/singleValue -value False
@@ -314,7 +321,7 @@ Deputs "----- TAG: $tag -----"
 			}
 		}
 	}
-	set deviceGroupObj [GetDependentNgpfProtocolHandle $handle "deviceGroup"]
+	set deviceGroupObj [$this cget -deviceHandle]
 	for { set index 0 } { $index < $times } { incr index } {
 		foreach route [ ixNet getL $deviceGroupObj networkGroup ] {
 		    ixNet setA [ixNet getA $route -enabled]/singleValue -value True
@@ -337,7 +344,7 @@ body OspfSession::set_topo {args} {
 	
 	set tag "body OspfSession::set_topo [info script]"
 Deputs "----- TAG: $tag -----"
-    set deviceGroupObj [GetDependentNgpfProtocolHandle $handle "deviceGroup"]
+    set deviceGroupObj [$this cget -deviceHandle]
 	set hRouter $handle
 	set hNetworkGroup [ixNet add $deviceGroupObj networkGroup]
 	ixNet commit
@@ -388,6 +395,9 @@ body OspfSession::unset_topo {} {
 	
 	set tag "body OspfSession::unset_topo [info script]"
 Deputs "----- TAG: $tag -----"
+	puts "Stopping  All Protocols"
+    ixNet exec stopAllProtocols
+	after 30000
     ixNet remove $hNetworkGroup networkGroup
 	ixNet commit
 }
@@ -397,7 +407,7 @@ class Ospfv2Session {
     constructor { port { hOspfSession NULL } } { chain $port $hOspfSession } {
 		set tag "body Ospfv2Session::ctor [info script]"
         Deputs "----- TAG: $tag -----"
-
+		set view ""
         if { [ catch {
             set hPort   [ $portObj cget -handle ]
         } ] } {
@@ -415,12 +425,17 @@ class Ospfv2Session {
             if { $handle != "" } {
                 set handleName [ ixNet getA $handle -name ] 
 				Deputs "----- ospfhandle2: $handleName -----"
+            } else {
+                set handleName $this
+                set handle ""
+                reborn
             }
-            
             
         } else {
             set handleName $this
             set handle ""
+			set view ""
+			
             reborn
         }
         
@@ -431,19 +446,85 @@ class Ospfv2Session {
 Deputs "----- TAG: $tag -----"
 
 		chain
-        set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
-		ixNet commit
-        set deviceGroupObj [ixNet add $topoObj deviceGroup]
-		ixNet commit
-		set deviceGroupObj [ ixNet remapIds $deviceGroupObj ]
-		ixNet setA $deviceGroupObj -multiplier 1
-        ixNet commit
-        set ethObj [ixNet add $deviceGroupObj ethernet]
-		ixNet commit
-        set ipv4Obj [ixNet add $ethObj ipv4]
-		ixNet commit
-        set ospfObj [ixNet add $ipv4Obj ospfv2]
-        ixNet commit
+		set topoObjList [ixNet getL [ixNet getRoot] topology]
+        Deputs "topoObjList: $topoObjList"
+        set vportList [ixNet getL [ixNet getRoot] vport]
+        #set vport [ lindex $vportList end ]
+        if {[llength $topoObjList] != [llength $vportList]} {
+            foreach topoObj $topoObjList {
+                set vportObj [ixNet getA $topoObj -vports]
+                foreach vport $vportList {
+                    if {$vportObj != $vport && $vport == $hPort} {
+                        set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
+                        set deviceGroupObj [ixNet add $topoObj deviceGroup]
+                        ixNet commit
+                        ixNet setA $deviceGroupObj -multiplier 1
+                        ixNet commit
+                        set ethernetObj [ixNet add $deviceGroupObj ethernet]
+                        set ipv4Obj [ixNet add $ethernetObj ipv4]
+                        ixNet commit
+                    }
+                }
+                break
+            }
+        }
+        set topoObjList [ixNet getL [ixNet getRoot] topology]
+        if { [ llength $topoObjList ] == 0 } {
+            set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
+            ixNet commit
+            set deviceGroupObj [ixNet add $topoObj deviceGroup]
+            ixNet commit
+            set deviceGroupObj [ ixNet remapIds $deviceGroupObj ]
+            ixNet setA $deviceGroupObj -multiplier 1
+            ixNet commit
+            set ethObj [ixNet add $deviceGroupObj ethernet]
+            ixNet commit
+            set ipv4Obj [ixNet add $ethObj ipv4]
+            ixNet commit
+            set ospfObj [ixNet add $ipv4Obj ospfv2]
+            ixNet commit
+        } else {
+            foreach topoObj $topoObjList {
+                set vportObj [ixNet getA $topoObj -vports]
+                if {$vportObj == $hPort} {
+                    set deviceGroupList [ixNet getL $topoObj deviceGroup]
+                    foreach deviceGroupObj $deviceGroupList {
+                        set ethernetList [ixNet getL $deviceGroupObj ethernet]
+                        if {$ethernetList != ""} {
+                            foreach ethernetObj $ethernetList {
+                                set ipv4Obj [ixNet getL $ethernetObj ipv4]
+                                if {$ipv4Obj != ""} {
+                                    set ospfObj [ixNet getL $ipv4Obj ospfv2]
+                                    if {$ospfObj == ""} {
+                                        set ospfObj [ixNet add $ipv4Obj ospfv2]
+                                        ixNet commit
+                                    }
+                                } else {
+                                   set ipv4Obj [ixNet add $ethernetObj ipv4]
+                                   set ospfObj [ixNet add $ipv4Obj ospfv2]
+                                   ixNet commit
+                                }
+                            }
+                        } else {
+                            set ethObj [ixNet add $deviceGroupObj ethernet]
+                            ixNet commit
+                            set ipv4Obj [ixNet getL $ethObj ipv4]
+                            if {$ipv4Obj != ""} {
+                                set ospfObj [ixNet getL $ipv4Obj ospfv2]
+                                if {$ospfObj == ""} {
+                                    set ospfObj [ixNet add $ipv4Obj ospfv2]
+                                    ixNet commit
+                                }
+                            } else {
+                               set ipv4Obj [ixNet add $ethObj ipv4]
+                               set ospfObj [ixNet add $ipv4Obj ospfv2]
+                               ixNet commit
+                            }
+                        }
+                    }
+                }
+            }
+        }
 		set ospfRtHandle [ ixNet getL $deviceGroupObj ospfv2Router ]
 		ixNet setA [ ixNet getA $ospfRtHandle -active]/singleValue -value True
 		ixNet commit
@@ -451,6 +532,7 @@ Deputs "----- TAG: $tag -----"
 		ixNet setA $handle -name $this
         Deputs "handleospf:$handle"
 		set protocol ospf
+		$this configure -deviceHandle $deviceGroupObj
 	}
 
 	method config { args } {}
@@ -465,17 +547,15 @@ body Ospfv2Session::get_status {} {
     set root [ixNet getRoot]
     Deputs "root $root"
 	set protocol "OSPFv2-RTR"
-	#set view [CreateProtocolView $protocol]
 	puts "Starting All Protocols"
     ixNet exec startAllProtocols
     puts "Sleep 30sec for protocols to start"
     after 50000
-	set view [CreateProtocolView $protocol]
+	if {$view == ""} {
+		set view [CreateNgpfProtocolView $protocol]
+		}
 	ixNet execute refresh $view
     set captionList             [ ixNet getA $view/page -columnCaptions ]
-	#set captionList1             [ ixNet exec getColumnValues $view/page -enabledStatsSelectorColumns ]
-	Deputs "captions:$captionList"
-	#Deputs "captions1:$captionList1"
     set name_index        		[ lsearch -exact $captionList {Port} ]
 	set down_index 				[ lsearch -exact $captionList {Down State Count} ]
     set attempt_index      		[ lsearch -exact $captionList {Attempted State Count} ]
@@ -489,9 +569,13 @@ body Ospfv2Session::get_status {} {
 	set stats [ ixNet getA $view/page -rowValues ]
     set portFound 0
     foreach row $stats {
+		Deputs "row:$row"
+		Deputs "port index:$name_index"
         eval {set row} $row
         set rowPortName [ lindex $row $name_index ]
+		Deputs "row port name:$rowPortName"
 		set portName [ ixNet getA $hPort -name ]
+		Deputs "portName:$portName"
 			if { [ regexp $portName $rowPortName ] } {
 				set portFound 1
 				break
@@ -551,6 +635,7 @@ body Ospfv2Session::get_status {} {
     set ret [ GetStandardReturnHeader ]
 	Deputs "ret :$ret"
     set ret $ret[ GetStandardReturnBody "status" $status ]
+	
 	Deputs "ret1 :$ret"
 	return $ret
 
@@ -566,10 +651,11 @@ body Ospfv2Session::get_stats {} {
     puts "Sleep 30sec for protocols to start"
     after 50000
 	set protocol "OSPFv2-RTR"
-	set view [CreateProtocolView $protocol]
+	if {$view == ""} {
+		set view [CreateNgpfProtocolView $protocol]
+		}
 	set captionList             [ ixNet getA $view/page -columnCaptions ]
-	#set captionList1             [ ixNet exec getColumnValues $view/page -enabledStatsSelectorColumns ]
-	Deputs "captions:$captionList"
+
 
     set name_index        		[ lsearch -exact $captionList {Port} ]
     set rx_ack_index          	[ lsearch -exact $captionList {LS Ack Rx} ]
@@ -599,8 +685,12 @@ body Ospfv2Session::get_stats {} {
     set portFound 0
     foreach row $stats {
         eval {set row} $row
+		Deputs "row:$row"
+		Deputs "port index:$name_index"
         set rowPortName [ lindex $row $name_index ]
+		Deputs "row port name:$rowPortName"
 		set portName [ ixNet getA $hPort -name ]
+		Deputs "portName:$portName"
         if { [ regexp $portName $rowPortName ] } {
             set portFound 1
             break
@@ -947,15 +1037,19 @@ Deputs "----- TAG: $tag -----"
             Deputs "----- handle: $handle -----"
             if { $handle != "" } {
                 set handleName [ ixNet getA $handle -name ] 
-            } 
+            } else {
+                set handleName $this
+                set handle ""
+                reborn
+            }
 			# else {
                # error "$errNumber(5) handle:$hOspfSession"
             # }
             
-            
         } else {
             set handleName $this
             set handle ""
+			set view ""
             reborn
         }
 	    
@@ -966,26 +1060,93 @@ Deputs "----- TAG: $tag -----"
 		set tag "body Ospfv3Session::reborn [info script]"
 Deputs "----- TAG: $tag -----"
 		chain
-		#set topoObjList [ixNet getL [ixNet getRoot] topology]
-
-        set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
-        set deviceGroupObj [ixNet add $topoObj deviceGroup]
-        set deviceGroupObj [ ixNet remapIds $deviceGroupObj ]
-		ixNet setA $deviceGroupObj -multiplier 1
-        ixNet commit
-        set ethObj [ixNet add $deviceGroupObj ethernet]
-		ixNet commit
-        set ipv6Obj [ixNet add $ethObj ipv6]
-		ixNet commit
-        set ospfv3Obj [ixNet add $ipv6Obj ospfv3]
-        ixNet commit
-
+		set topoObjList [ixNet getL [ixNet getRoot] topology]
+        Deputs "topoObjList: $topoObjList"
+        set vportList [ixNet getL [ixNet getRoot] vport]
+        #set vport [ lindex $vportList end ]
+        if {[llength $topoObjList] != [llength $vportList]} {
+            foreach topoObj $topoObjList {
+                set vportObj [ixNet getA $topoObj -vports]
+                foreach vport $vportList {
+                    if {$vportObj != $vport && $vport == $hPort} {
+                        set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
+                        set deviceGroupObj [ixNet add $topoObj deviceGroup]
+                        ixNet commit
+                        ixNet setA $deviceGroupObj -multiplier 1
+                        ixNet commit
+                        set ethernetObj [ixNet add $deviceGroupObj ethernet]
+                        set ipv6Obj [ixNet add $ethernetObj ipv6]
+                        ixNet commit
+                    }
+                }
+                break
+            }
+        }
+        set topoObjList [ixNet getL [ixNet getRoot] topology]
+        if { [ llength $topoObjList ] == 0 } {
+            set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
+            ixNet commit
+            set deviceGroupObj [ixNet add $topoObj deviceGroup]
+            ixNet commit
+            set deviceGroupObj [ ixNet remapIds $deviceGroupObj ]
+            ixNet setA $deviceGroupObj -multiplier 1
+            ixNet commit
+            set ethObj [ixNet add $deviceGroupObj ethernet]
+            ixNet commit
+            set ipv6Obj [ixNet add $ethObj ipv6]
+            ixNet commit
+            set ospfv3Obj [ixNet add $ipv6Obj ospfv3]
+            ixNet commit
+        } else {
+            foreach topoObj $topoObjList {
+                set vportObj [ixNet getA $topoObj -vports]
+                if {$vportObj == $hPort} {
+                    set deviceGroupList [ixNet getL $topoObj deviceGroup]
+                    foreach deviceGroupObj $deviceGroupList {
+                        set ethernetList [ixNet getL $deviceGroupObj ethernet]
+                        if {$ethernetList != ""} {
+                            foreach ethernetObj $ethernetList {
+                                set ipv6Obj [ixNet getL $ethernetObj ipv6]
+                                if {$ipv6Obj != ""} {
+                                    set ospfv3Obj [ixNet getL $ipv6Obj ospfv3]
+                                    if {$ospfv3Obj == ""} {
+                                        set ospfv3Obj [ixNet add $ipv6Obj ospfv3]
+                                        ixNet commit
+                                    }
+                                } else {
+                                   set ipv6Obj [ixNet add $ethernetObj ipv6]
+                                   ixNet commit
+                                   set ospfv3Obj [ixNet add $ipv6Obj ospfv3]
+                                   ixNet commit
+                                }
+                            }
+                        } else {
+                            set ethObj [ixNet add $deviceGroupObj ethernet]
+                            ixNet commit
+                            set ipv6Obj [ixNet getL $ethObj ipv6]
+                            if {$ipv6Obj != ""} {
+                                set ospfv3Obj [ixNet getL $ipv6Obj ospfv3]
+                                if {$ospfv3Obj == ""} {
+                                    set ospfv3Obj [ixNet add $ipv6Obj ospfv3]
+                                    ixNet commit
+                                }
+                            } else {
+                               set ipv6Obj [ixNet add $ethObj ipv6]
+                               set ospfv3Obj [ixNet add $ipv6Obj ospfv3]
+                               ixNet commit
+                            }
+                        }
+                    }
+                }
+            }
+        }
         set ospfRtHandle [ ixNet getL $deviceGroupObj ospfv3Router ]
         ixNet setA [ ixNet getA $ospfRtHandle -active]/singleValue -value True
 		ixNet commit
 		set handle [ ixNet remapIds $ospfv3Obj ]
 		ixNet setA $handle -name $this
-		Deputs "handlev3ospf:$handle"
+		$this configure -deviceHandle $deviceGroupObj
+        Deputs "handlev3ospf:$handle"
 		set protocol ospfV3
  		generate_interface	
 	}
@@ -1003,14 +1164,14 @@ Deputs "----- TAG: $tag -----"
     set root [ixNet getRoot]
 Deputs "root $root"
 	set protocol "OSPFv3-RTR"
-	#set view [CreateProtocolView $protocol]
 	puts "Starting All Protocols"
     ixNet exec startAllProtocols
     puts "Sleep 30sec for protocols to start"
     after 50000
-	set view [CreateProtocolView $protocol]
+	if {$view == ""} {
+		set view [CreateNgpfProtocolView $protocol]
+		}
     set captionList         [ ixNet getA $view/page -columnCaptions ]
-	Deputs "caption:$captionList"
     set name_index        		[ lsearch -exact $captionList {Port} ]
 	set down_index 				[ lsearch -exact $captionList {Neighbors Down Count} ]
     set attempt_index      		[ lsearch -exact $captionList {Neighbors Attempt Count} ]
@@ -1022,24 +1183,22 @@ Deputs "root $root"
 	set full_index				[ lsearch -exact $captionList {Neighbors Full Count} ]
 
 	set stats [ ixNet getA $view/page -rowValues ]
-	 Deputs "stats : $stats"
+	Deputs "stats:$stats"
     set portFound 0
     foreach row $stats {
         eval {set row} $row
+		Deputs "row:$row"
+		Deputs "port index:$name_index"
         set rowPortName [ lindex $row $name_index ]
+		Deputs "row port name:$rowPortName"
 		set portName [ ixNet getA $hPort -name ]
+		Deputs "portName:$portName"
 			if { [ regexp $portName $rowPortName ] } {
 				set portFound 1
 				break
         }
     }
 
-   Deputs "down_index:$down_index"
-   Deputs "attempt_index:$attempt_index"
-   Deputs "init_index:$init_index"
-   Deputs "twoway_index:$twoway_index"
-   Deputs "exstart_index:$exstart_index"
-   Deputs "loading_index:$loading_index"
 	set status "down"
 
 	# down��attempt��init��two_ways��exstart��exchange��loading��full
@@ -1086,7 +1245,7 @@ Deputs "root $root"
 }
 
 body Ospfv3Session::get_stats {} {
-	set tag "body Ospfv3Session::get_status [info script]"
+	set tag "body Ospfv3Session::get_stats [info script]"
 Deputs "----- TAG: $tag -----"
 
     set root [ixNet getRoot]
@@ -1096,186 +1255,196 @@ Deputs "root $root"
     puts "Sleep 30sec for protocols to start"
     after 50000
 	set protocol "OSPFv3-RTR"
-	set view [CreateProtocolView $protocol]
+	set view [CreateNgpfProtocolView $protocol]
     set captionList         [ ixNet getA $view/page -columnCaptions ]
+	Deputs "captionList:$captionList"
+	
 
-    set name_index        		[ lsearch -exact $captionList {Stat Name} ]
+    set name_index        		[ lsearch -exact $captionList {Port} ]
     set rx_ack_index          	[ lsearch -exact $captionList {LS Ack Rx} ]
     set tx_ack_index          	[ lsearch -exact $captionList {LS Ack Tx} ]
 	set rx_dd_index				[ lsearch -exact $captionList {DBD Rx} ]
 	set tx_dd_index				[ lsearch -exact $captionList {DBD Tx} ]
 	set rx_hello_index			[ lsearch -exact $captionList {Hellos Rx} ]
 	set tx_hello_index			[ lsearch -exact $captionList {Hellos Tx} ]
-	set rx_network_lsa_index	[ lsearch -exact $captionList {NetworkLSA Rx} ]
-	set tx_network_lsa_index	[ lsearch -exact $captionList {NetworkLSA Tx} ]
-	set rx_nssa_lsa_index		[ lsearch -exact $captionList {NSSALSA Rx} ]
-	set tx_nssa_lsa_index		[ lsearch -exact $captionList {NSSALSA Tx} ]
+	set rx_network_lsa_index	[ lsearch -exact $captionList {Network LSA Rx} ]
+	set tx_network_lsa_index	[ lsearch -exact $captionList {Network LSA Tx} ]
+	set rx_nssa_lsa_index		[ lsearch -exact $captionList {NSSA LSA Rx} ]
+	set tx_nssa_lsa_index		[ lsearch -exact $captionList {NSSA LSA Tx} ]
 	set rx_request_index		[ lsearch -exact $captionList {LS Request Rx} ]
 	set tx_request_index		[ lsearch -exact $captionList {LS Request Tx} ]
-	set rx_router_lsa_index		[ lsearch -exact $captionList {RouterLSA Rx} ]
-	set tx_router_lsa_index		[ lsearch -exact $captionList {RouterLSA Tx} ]
-	set rx_as_external_lsa_index 	[ lsearch -exact $captionList {ExternalLSA Rx} ]
-	set tx_as_external_lsa_index 	[ lsearch -exact $captionList {ExternalLSA Tx} ]
+	set rx_router_lsa_index		[ lsearch -exact $captionList {Router LSA Rx} ]
+	set tx_router_lsa_index		[ lsearch -exact $captionList {Router LSA Tx} ]
+	set rx_as_external_lsa_index 	[ lsearch -exact $captionList {External LSA Rx} ]
+	set tx_as_external_lsa_index 	[ lsearch -exact $captionList {External LSA Tx} ]
 	set rx_update_index	 		[ lsearch -exact $captionList  {LS Update Rx}  ]
 	set tx_update_index	 		[ lsearch -exact $captionList  {LS Update Tx}  ]
 
-    set rx_inter_area_prefix_lsa_index 	[ lsearch -exact $captionList  {InterareaPrefixLSA Rx}  ]
-    set tx_inter_area_prefix_lsa_index 	[ lsearch -exact $captionList  {InterareaPrefixLSA Tx}  ]
-	set rx_inter_area_router_lsa_index	[ lsearch -exact $captionList {InterareaRouterLSA Rx} ]
-	set tx_inter_area_router_lsa_index	[ lsearch -exact $captionList {InterareaRouterLSA Tx} ]
-	set rx_intra_area_prefix_lsa_index	[ lsearch -exact $captionList {IntraareaPrefixLSA Rx} ]
-	set tx_intra_area_prefix_lsa_index	[ lsearch -exact $captionList {InterareaPrefixLSA Tx} ]
-	set rx_link_lsa_index	[ lsearch -exact $captionList {LinkLSA Rx} ]
-	set tx_link_lsa_index	[ lsearch -exact $captionList {LinkLSA Tx} ]
+    set rx_inter_area_prefix_lsa_index 	[ lsearch -exact $captionList  {InterArea Prefix LSA Rx}  ]
+    set tx_inter_area_prefix_lsa_index 	[ lsearch -exact $captionList  {InterArea Prefix LSA Tx}  ]
+	set rx_inter_area_router_lsa_index	[ lsearch -exact $captionList {InterArea Router LSA Rx} ]
+	set tx_inter_area_router_lsa_index	[ lsearch -exact $captionList {InterArea Router LSA Tx} ]
+	set rx_intra_area_prefix_lsa_index	[ lsearch -exact $captionList {IntraArea Prefix LSA Rx} ]
+	set tx_intra_area_prefix_lsa_index	[ lsearch -exact $captionList {IntraArea Prefix LSA Tx} ]
+	set rx_link_lsa_index	[ lsearch -exact $captionList {Link LSA Rx} ]
+	set tx_link_lsa_index	[ lsearch -exact $captionList {Link LSA Tx} ]
 
 
 	set stats [ ixNet getA $view/page -rowValues ]
-Deputs "stats:$stats"
+	Deputs "stats:$stats"
     set portFound 0
     foreach row $stats {
+		Deputs "row:$row"
+		Deputs "port index:$name_index"
         eval {set row} $row
         set rowPortName [ lindex $row $name_index ]
+		Deputs "row port name:$rowPortName"
 		set portName [ ixNet getA $hPort -name ]
+		Deputs "portName:$portName"
         if { [ regexp $portName $rowPortName ] } {
             set portFound 1
             break
         }
     }
     set ret "Status : true\nLog : \n"
-
     if { $portFound } {
-	    set statsItem   "rx_ack"
+		Deputs "stats"
+	   set statsItem   "rx_ack"
 		set statsVal    [ lindex $row $rx_ack_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-
-	    set statsItem   "tx_ack"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "tx_ack"
 		set statsVal    [ lindex $row $tx_ack_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
 
-	    set statsItem   "rx_dd"
+	   set statsItem   "rx_dd"
 		set statsVal    [ lindex $row $rx_dd_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-
-	    set statsItem   "tx_dd"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "tx_dd"
 		set statsVal    [ lindex $row $tx_dd_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-
-	    set statsItem   "rx_hello"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "rx_hello"
 		set statsVal    [ lindex $row $rx_hello_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-
-	    set statsItem   "tx_hello"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "tx_hello"
 		set statsVal    [ lindex $row $tx_hello_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-
-	    set statsItem   "rx_network_lsa"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "rx_network_lsa"
 		set statsVal    [ lindex $row $rx_network_lsa_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-
-	    set statsItem   "tx_network_lsa"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "tx_network_lsa"
 		set statsVal    [ lindex $row $tx_network_lsa_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-
-	    set statsItem   "rx_nssa_lsa"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "rx_nssa_lsa"
 		set statsVal    [ lindex $row $rx_nssa_lsa_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-
-	    set statsItem   "tx_nssa_lsa"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "tx_nssa_lsa"
 		set statsVal    [ lindex $row $tx_nssa_lsa_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-
-	    set statsItem   "rx_request"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "rx_request"
 		set statsVal    [ lindex $row $rx_request_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-
-	    set statsItem   "tx_request"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "tx_request"
 		set statsVal    [ lindex $row $tx_request_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-
-	    set statsItem   "rx_router_lsa"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "rx_router_lsa"
 		set statsVal    [ lindex $row $rx_router_lsa_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-
-	    set statsItem   "tx_router_lsa"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "tx_router_lsa"
 		set statsVal    [ lindex $row $tx_router_lsa_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-
-	    set statsItem   "rx_as_external_lsa"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]	   
+	   
+	   set statsItem   "rx_as_external_lsa"
 		set statsVal    [ lindex $row $rx_as_external_lsa_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-
-	    set statsItem   "tx_as_external_lsa"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "tx_as_external_lsa"
 		set statsVal    [ lindex $row $tx_as_external_lsa_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-
-	    set statsItem   "rx_update"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "rx_update"
 		set statsVal    [ lindex $row $rx_update_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-
-	    set statsItem   "tx_update"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "tx_update"
 		set statsVal    [ lindex $row $tx_update_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	      
 	    set statsItem   "rx_inter_area_prefix_lsa"
 	    set statsVal    [ lindex $row $rx_inter_area_prefix_lsa_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-
-	    set statsItem   "tx_inter_area_prefix_lsa"
-	    set statsVal    [ lindex $row $tx_inter_area_prefix_lsa_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-
+Deputs "stats val:$statsVal"
+	  set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "tx_inter_area_prefix_lsa"
+	   set statsVal    [ lindex $row $tx_inter_area_prefix_lsa_index ]
+Deputs "stats val:$statsVal"
+	 set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	    
 	    set statsItem   "rx_inter_area_router_lsa"
 	    set statsVal    [ lindex $row $rx_inter_area_router_lsa_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-
+Deputs "stats val:$statsVal"
+	  set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	    
 	    set statsItem   "tx_inter_area_router_lsa"
 	    set statsVal    [ lindex $row $tx_inter_area_router_lsa_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-
+Deputs "stats val:$statsVal"
+	  set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	    
 	    set statsItem   "rx_intra_area_prefix_lsa"
 	    set statsVal    [ lindex $row $rx_intra_area_prefix_lsa_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-
+Deputs "stats val:$statsVal"
+	  set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	    
 	    set statsItem   "tx_intra_area_prefix_lsa"
 	    set statsVal    [ lindex $row $tx_intra_area_prefix_lsa_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-
+Deputs "stats val:$statsVal"
+	  set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	    
 	    set statsItem   "rx_link_lsa"
 	    set statsVal    [ lindex $row $rx_link_lsa_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
-
+Deputs "stats val:$statsVal"
+	  set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	    
 	    set statsItem   "tx_link_lsa"
 	    set statsVal    [ lindex $row $tx_link_lsa_index ]
-        Deputs "stats val:$statsVal"
-	    set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+Deputs "stats val:$statsVal"
+	  set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	    
     }
-    Deputs "ret:$ret"
+
+Deputs "ret:$ret"
+	
     return $ret
+	
 }
 
 body Ospfv3Session::config { args } {
@@ -1503,7 +1672,7 @@ class SimulatedSummaryRoute {
 		global errNumber
 	    
 		set tag "body SimulatedSummaryRoute::ctor [info script]"
-        Deputs "----- TAG: $tag -----"
+Deputs "----- TAG: $tag -----"
 
 		set routerObj [ GetObject $router ]
 		set handle ""
@@ -1513,27 +1682,27 @@ class SimulatedSummaryRoute {
 	
 	method reborn {} {
 		set tag "body SimulatedSummaryRoute::reborn [info script]"
-        Deputs "----- TAG: $tag -----"
-        if { [ catch {
+Deputs "----- TAG: $tag -----"
+        #set deviceGroupObj [$this cget -deviceHandle]
+		if { [ catch {
 			set hRouter   [ $routerObj cget -handle ]
 		} ] } {
 			error "$errNumber(1) Router Object in SimulatedSummaryRoute ctor"
 		}
-
 		if {[string first "ospfv2" $hRouter] != -1} {
             set ip_version "ipv4"
         }
         if {[string first "ospfv3" $hRouter] != -1} {
             set ip_version "ipv6"
         }
-		set deviceGroupObj [GetDependentNgpfProtocolHandle $hRouter "deviceGroup"]
+        set deviceGroupObj [GetDependentNgpfProtocolHandle $hRouter "deviceGroup"]
 		set hRouteRange [ixNet add $deviceGroupObj "networkGroup"]
         ixNet commit
         set handle [ ixNet remapIds $hRouteRange ]
         ixNet setA [ixNet getA $handle -enabled]/singleValue -value True
         ixNet commit
         if {$ip_version == "ipv4"} {
-           	set ipv4PoolObj [ixNet add $handle "ipv4PrefixPools"]
+            set ipv4PoolObj [ixNet add $handle "ipv4PrefixPools"]
             ixNet setM $ipv4PoolObj -addrStepSupported true -name "Basic\ IPv4\ Addresses\ 1"
             ixNet commit
             set connector [ixNet add $ipv4PoolObj connector]
@@ -1548,26 +1717,26 @@ class SimulatedSummaryRoute {
             ixNet setA $connector -connectedTo $hRouter
             ixNet commit
         }
-		Deputs "in SimulatedSummaryRoute::reborn value of routerObj $routerObj"
-        set portObj [ $routerObj cget -portObj ]
+		set portObj [ $routerObj cget -portObj ]
 		set hPort [ $routerObj cget -hPort ]
-    	Deputs "portObj:$portObj"
-    	Deputs "hPort:$hPort"
+Deputs "portObj:$portObj"
+Deputs "hPort:$hPort"
 	}
 	method config { args } {}
+	
 }
 body SimulatedSummaryRoute::config { args } {
     global errorInfo
     global errNumber
     set tag "body SimulatedSummaryRoute::config [info script]"
-    Deputs "----- TAG: $tag -----"
+Deputs "----- TAG: $tag -----"
 
 	if { $handle == "" } {
 		reborn
 	}
-    #param collection
+#param collection
    
-    Deputs "Args:$args "
+Deputs "Args:$args "
 
     foreach { key value } $args {
         set key [string tolower $key]
@@ -1587,15 +1756,17 @@ body SimulatedSummaryRoute::config { args } {
             -enabled {
                 set enabled [BoolTrans $value]
             }
+
         }
     }
+
     if { [ info exists ipv4PoolObj ] } {
         set ospfRouteObj [ixNet getL $ipv4PoolObj ospfRouteProperty]
     }
     if { [ info exists ipv6PoolObj ] } {
         set ospfRouteObj [ixNet getL $ipv6PoolObj ospfv3RouteProperty]
     }
-	if { [ info exists metric ]} {
+	if { [ info exists metric ] } {
 		ixNet setA [ixNet getA $ospfRouteObj -metric]/singleValue -value $metric
 	    ixNet commit
 	}
@@ -1607,7 +1778,9 @@ body SimulatedSummaryRoute::config { args } {
 		$route_block configure -protocol "ospf"
 		
 		if { $rb == "" } {
+		
 			return [GetErrorReturnHeader "No object found...-route_block"]
+			
 		}
 		
 		set num 		[ $rb cget -num ]
@@ -1615,7 +1788,7 @@ body SimulatedSummaryRoute::config { args } {
 		set step		[ $rb cget -step ]
 		set prefix_len	[ $rb cget -prefix_len ]
 
-        Deputs "num:$num start:$start step:$step prefix_len:$prefix_len"
+Deputs "num:$num start:$start step:$step prefix_len:$prefix_len"
         ixNet setA $handle -multiplier $num
         ixNet setA [ixNet getA $handle -enabled]/singleValue -value True
         ixNet commit
@@ -1625,7 +1798,6 @@ body SimulatedSummaryRoute::config { args } {
         } else {
             set step 1
         }
-
         if {[IsIPv6Address $start]} {
 			ixNet setM [ixNet getA $ipv6PoolObj -networkAddress]/counter -start $start -direction increment
 			ixNet setA [ixNet getA $ipv6PoolObj -prefixLength]/singleValue -value $pLen
@@ -1683,6 +1855,7 @@ body SimulatedSummaryRoute::config { args } {
 	}
 	
     return [GetStandardReturnHeader]
+	
 }
 
 class SimulatedInterAreaRoute {
@@ -1694,7 +1867,7 @@ class SimulatedInterAreaRoute {
 		global errNumber
 	    
 		set tag "body SimulatedSummaryRoute::ctor [info script]"
-        Deputs "----- TAG: $tag -----"
+Deputs "----- TAG: $tag -----"
 
 		set routerObj [ GetObject $router ]
 		if { [ catch {
@@ -1708,10 +1881,12 @@ class SimulatedInterAreaRoute {
         if {[string first "ospfv3" $hRouter] != -1} {
             set ip_version "ipv6"
         }
-		set deviceGroupObj [GetDependentNgpfProtocolHandle $hRouter "deviceGroup"]
+        set deviceGroupObj [GetDependentNgpfProtocolHandle $hRouter "deviceGroup"]
 		set hRouteRange [ixNet add $deviceGroupObj "networkGroup"]
         ixNet commit
         set handle [ ixNet remapIds $hRouteRange ]
+		#set hRouteRange [ixNet add $hRouter routeRange]
+		#ixNet commit
 		ixNet setA [ixNet getA $handle -enabled]/singleValue -value True
 		ixNet commit
 		if {$ip_version == "ipv4"} {
@@ -1747,7 +1922,7 @@ class SimulatedLink {
 		global errNumber
 	    
 		set tag "body SimulatedSummaryRoute::ctor [info script]"
-        Deputs "----- TAG: $tag -----"
+Deputs "----- TAG: $tag -----"
 
 		set routerObj [ GetObject $router ]
 		if { [ catch {
@@ -1761,7 +1936,7 @@ class SimulatedLink {
         if {[string first "ospfv3" $hRouter] != -1} {
             set ip_version "ipv6"
         }
-		set deviceGroupObj [GetDependentNgpfProtocolHandle $hRouter "deviceGroup"]
+        set deviceGroupObj [GetDependentNgpfProtocolHandle $hRouter "deviceGroup"]
 		set hRouteRange [ixNet add $deviceGroupObj "networkGroup"]
         ixNet commit
         set handle [ ixNet remapIds $hRouteRange ]
@@ -1792,10 +1967,10 @@ body SimulatedLink::config { args } {
     global errorInfo
     global errNumber
     set tag "body SimulatedLink::config [info script]"
-    Deputs "----- TAG: $tag -----"
+Deputs "----- TAG: $tag -----"
 
-    #param collection
-    Deputs "Args:$args "
+#param collection
+Deputs "Args:$args "
     foreach { key value } $args {
 	   set key [string tolower $key]
 	   switch -exact -- $key {
@@ -1904,7 +2079,7 @@ class SimulatedRouter {
 	public variable hUserlsa
     constructor { router } {
 		global errNumber
-	    
+
 		set tag "body SimulatedSummaryRoute::ctor [info script]"
         Deputs "----- TAG: $tag -----"
 
@@ -1926,7 +2101,6 @@ class SimulatedRouter {
         #Available options are netTopologyCustom netTopologyFatTree netTopologyGrid netTopologyHubNSpoke netTopologyLinear netTopologyMesh netTopologyRing netTopologyTree
         set linearTopology [ixNet add $hNetworkRange netTopologyFatTree]
         ixNet commit
-
 		set trafficObj $hUserlsa
 	}
 	method config { args } {}
@@ -1934,7 +2108,7 @@ class SimulatedRouter {
 body SimulatedRouter::config { args } {
 	global errorInfo
      global errNumber
-	
+
 	set type normal
      set tag "body SimulatedRouter::config [info script]"
 Deputs "----- TAG: $tag -----"
@@ -1945,7 +2119,7 @@ Deputs "Args:$args "
 		switch -exact -- $key {
 			-id {
 				set id $value
-			}            
+			}
 			-type {
 				set type $value
 			}
@@ -1958,7 +2132,7 @@ Deputs "Args:$args "
 	set ospfRouterObj [ixNet getL $simRouterObj ospfPseudoRouter]
 	set ospfV3RouterObj [ixNet getL $simRouterObj ospfv3PseudoRouter]
 	if { [ info exists type ] } {
-		switch $type {						
+		switch $type {
 			abr {
 				if {$ospfRouterObj != ""} {
 				    ixNet setA [ixNet getA $ospfRouterObj -bBit]/singleValue -value True
@@ -1974,7 +2148,7 @@ Deputs "Args:$args "
 				if {$ospfV3RouterObj != ""} {
 				    ixNet setA [ixNet getA $ospfV3RouterObj -eBit]/singleValue -value True
 				}
-			}	
+			}
 			vl {
 				#ixNet setM $hUserlsa/router -vBit True
 				Deputs "vBit not available in NGPF"
@@ -1991,10 +2165,10 @@ Deputs "Args:$args "
 			}
 		}
 	}
-	
+
 	ixNet commit
 	return [GetStandardReturnHeader]
-	
+
 }
 
 class SimulatedNssaRoute {
@@ -2021,7 +2195,7 @@ Deputs "----- TAG: $tag -----"
         if {[string first "ospfv3" $hRouter] != -1} {
             set ip_version "ipv6"
         }
-		set deviceGroupObj [GetDependentNgpfProtocolHandle $hRouter "deviceGroup"]
+        set deviceGroupObj [GetDependentNgpfProtocolHandle $hRouter "deviceGroup"]
 		set hRouteRange [ixNet add $deviceGroupObj "networkGroup"]
         ixNet commit
         set handle [ ixNet remapIds $hRouteRange ]
@@ -2186,7 +2360,7 @@ Deputs "----- TAG: $tag -----"
         if {[string first "ospfv3" $hRouter] != -1} {
             set ip_version "ipv6"
         }
-		set deviceGroupObj [GetDependentNgpfProtocolHandle $hRouter "deviceGroup"]
+        set deviceGroupObj [GetDependentNgpfProtocolHandle $hRouter "deviceGroup"]
 		set hRouteRange [ixNet add $deviceGroupObj "networkGroup"]
         ixNet commit
         set handle [ ixNet remapIds $hRouteRange ]
@@ -2358,7 +2532,7 @@ Deputs "----- TAG: $tag -----"
         if {[string first "ospfv3" $hRouter] != -1} {
             set ip_version "ipv6"
         }
-		set deviceGroupObj [GetDependentNgpfProtocolHandle $hRouter "deviceGroup"]
+        set deviceGroupObj [GetDependentNgpfProtocolHandle $hRouter "deviceGroup"]
 		set hRouteRange [ixNet add $deviceGroupObj "networkGroup"]
         ixNet commit
         set handle [ ixNet remapIds $hRouteRange ]
@@ -2521,7 +2695,7 @@ Deputs "----- TAG: $tag -----"
         if {[string first "ospfv3" $hRouter] != -1} {
             set ip_version "ipv6"
         }
-		set deviceGroupObj [GetDependentNgpfProtocolHandle $hRouter "deviceGroup"]
+        set deviceGroupObj [GetDependentNgpfProtocolHandle $hRouter "deviceGroup"]
 		set hRouteRange [ixNet add $deviceGroupObj "networkGroup"]
         ixNet commit
         set handle [ ixNet remapIds $hRouteRange ]
@@ -2562,11 +2736,14 @@ Deputs "Args:$args "
 		  -age {
 				set age $value
 		  }            
-	      -checksum {
+			-checksum {
 				set checksum $value
 		  }
 		  -metric {
 				set metric $value
+		  }            
+			-route_block {
+				set route_block $value
 		  }
           -route_block {
 				set route_block $value

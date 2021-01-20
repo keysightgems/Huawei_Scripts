@@ -9,7 +9,7 @@
 
 
 class Dot1xRate {
-    inherit NetObject
+    inherit NetNgpfObject
     
     constructor {} {}
 	method reborn {} {}
@@ -18,7 +18,6 @@ class Dot1xRate {
 		chain
 		
 	}
-	
   
 }
 
@@ -102,10 +101,13 @@ Deputs "Step20"
 Deputs "Step30"
     	error "$errNumber(2) key:test_endpoints"
     } 
-	
+
     foreach testport $testendpoints {
         set hPort [$testport cget -handle]
-        set protocolhandle [ixNet getL $hPort/protocolStack dot1xOptions]
+        #set protocolhandle [ixNet getL $hPort/protocolStack dot1xOptions]
+        set protocolhandle [ixNet add $hPort/protocolStack dot1xOptions]
+        ixNet commit
+        set protocolhandle [ixNet remapIds $protocolhandle]
         if { $protocolhandle != "" } {
 		    set pshandle [lindex [ixNet getL $hPort protocolStack] 0]
             set sg_resource [ixNet add $handle resource]          
@@ -119,7 +121,7 @@ Deputs "Step30"
         }
     
     }
-	
+
 Deputs "Step110"
     if { [ info exists maxoutstandingreq ] } {
 	    set sg_parameter [ixNet add $handle/controlPlane "parameter"]
@@ -174,8 +176,7 @@ Deputs "Step140"
             -waitTime $waittime
         ixNet commit
     }
-    
-    
+
 	
 Deputs "Step150"
 # enable latency
