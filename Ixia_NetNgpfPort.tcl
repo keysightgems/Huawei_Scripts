@@ -231,13 +231,16 @@ class Port {
 		array set ripngList   ""
 		array set l2tpList	  ""
       
+        # available protocols from low level commands:
+        set protocolList [list "ancp" "bfdRouter" "bgpIpv4Peer" "bgpIpv6Peer" "bondedGRE" "cfmBridge" "dhcpv4client" "dhcpv4relayAgent" "dhcpv4server" "dhcpv6client" "dhcpv6relayAgent" "dhcpv6server" "dotOneX" "eCpriRe" "ecpriRec" "eCpriRec" "ere" "esmc" "ethernet" "geneve" "greoipv4" "greoipv6" "igmpHost" "igmpQuerier" "ipv4" "ipv6" "ipv6Autoconfiguration" "isisFabricPathRouter" "isisL3Router" "isisSpbRouter"  "isisTrillRouter" "lac" "lacp"  "lagportlacp" "lagportstaticlag" "ldpBasicRouter" "ldpBasicRouterV6" "ldpTargetedRouter" "ldpTargetedRouterV6" "lightweightDhcpv6relayAgent" "lns" "macsec" "mka" "mldHost" "mldQuerier" "msrpListener" "msrpTalker" "netconfClient" "netconfServer" "ntpclock" "openFlowChannel" "openFlowController" "ospfv2Router" "ospfv3Router" "ovsdbcontroller" "ovsdbserver" "pcc" "pce" "pimRouter" "pppoxclient" "pppoxserver" "ptp" "rsvpteIf" "rsvpteLsps" "staticLag" "staticMacsec" "vxlan" "vxlanv6"]
+
         set vport_protocols     [ixNet getL $handle protocols]
         set vport_protocolStack [ixNet getL $handle protocolStack]
         
        
     #bgp                     
-        set bgpH [ixNet getL $vport_protocols bgp]
-        if {[ixNet getA $bgpH  -enabled] == "true" } {
+        # set bgpH [ixNet getL $vport_protocols bgp]
+        if {[ixNet getA /globals/topology/bgpIpv4Peer -count] != 0 } {
             #only can start bgpH, can disable bgpNR
             set deviceList(bgp) $bgpH
             foreach bgpNR [ixNet getL $bgpH neighborRange] {
@@ -1540,43 +1543,29 @@ Deputs "----- TAG: $tag -----"
 #param collection
 Deputs "handle:$handle"
     set phy_status [ ixNet getA $handle -state ]
-Deputs Step10
-    set neighbor [ lindex [ ixNet getL $handle discoveredNeighbor ] 0 ]
     set actaul_speed [ ixNet getA $handle -actualSpeed ]
-Deputs Step20
-Deputs "neighbor:$neighbor"
-    if { [ catch {
-    	set dutMac	[ MacTrans [ ixNet getA $neighbor -neighborMac ] 1 ]
-    } ] } {
-		set dutMac 00-00-00-00-00-00
+    set dutMac 00-00-00-00-00-00
+    set topoList [ixNet getL / topology]
+    foreach topoObj $topoList {
+        regexp {(\/vport:\d+)} [ixNet getA $topoObj -vports] match topologyVport
+        if { $topologyVport == $handle } {
+            Deputs "port matched"
+            set ethList [ixNet getL [ixNet getL $topoObj deviceGroup] ethernet]
+            foreach ethObj $ethList {
+                Deputs "looping ethList"
+                set macPattern [ixNet getA [ixNet getA $ethObj -mac] -pattern]
+                set port_mac [GetMultiValues $ethObj "-mac" $macPattern]
+                set port_mac [regsub -all ":" $port_mac "-"]
+                set ipv4List [ixNet getL $ethObj ipv4]
+                foreach ipv4Obj $ipv4List {
+                    Deputs "looping ipObj $ipv4Obj"
+                    set ipPattern [ixNet getA [ixNet getA $ipv4Obj -address] -pattern]
+                    set ipv4Addr [GetMultiValues $ipv4Obj "-address" $ipPattern]
+                    break
+                }
+            }
+        }
     }
-Deputs Step30
-    if { [ catch {
-		set dutIp	 [ ixNet getA $neighbor -neighborIp ]
-    } ] } {
-		set dutIp 0.0.0.0
-    }
-Deputs Step40    
-    if { [ catch {
-Deputs Step50   
-    	set interface [ lindex [ ixNet getL $handle interface ] 0 ]
-Deputs Step60
-    	set ipv4Int   [ lindex [ ixNet getL $interface ipv4 ] 0 ]
-Deputs Step70
-    	set ipv4Addr [ ixNet getA $ipv4Int -ip ]
-Deputs Step80
-    } log ] } {
-Deputs Step90
-    	set ipv4Addr 0.0.0.0
-    }
-Deputs Step100  
-	if { [ catch {
-    	set interface [ lindex [ ixNet getL $handle interface ] 0 ]
-		set port_mac	[ MacTrans [ ixNet getA $interface/ethernet -macAddress ] 1 ]
-Deputs "port_mac:$port_mac"
-		} ] } {
-		set port_mac	00-00-00-00-00-00
-	}
     set ret [ GetStandardReturnHeader ]
     set ret $ret[ GetStandardReturnBody "phy_state" $phy_status ]
     set ret $ret[ GetStandardReturnBody "dut_mac" $dutMac ]
@@ -1591,9 +1580,9 @@ body Port::ping { args } {
     set tag "body Port::ping [info script]"
 Deputs "----- TAG: $tag -----"
 
-	set count 		1
-	set interval 	1000
-	set flag 		1
+	set count 1
+	set interval 1000
+	set flag 1
 
     #param collection
     Deputs "Args:$args "
@@ -1643,32 +1632,41 @@ Deputs "----- TAG: $tag -----"
         }
     }
     
-	set pingTrue	0
-	set pingFalse	0
+	set pingTrue 0
+	set pingFalse 0
 
 Deputs "add pint interface..."	
+    set topoList [ixNet getL / topology]
+    foreach topoObj $topoList {
+        regexp {(\/vport:\d+)} [ixNet getA $topoObj -vports] match topologyVport
+        if { $topologyVport == $handle } {
+            set ethList [ixNet getL [ixNet getL $topoObj deviceGroup] ethernet]
+            foreach ethObj $ethList {
+                set ipv4List [ixNet getL $ethObj ipv4]
+            }
+        }
+    }
 	if { [ info exists intf_ip ] } {
-		set int [ixNet add $handle interface]
-		ixNet setA $int/ipv4 -ip $intf_ip
-		ixNet commit
-		
+        foreach int $ipv4List {
+            set ipPattern [ixNet getA [ixNet getA $int -address] -pattern]
+            SetMultiValues $int "-address" $ipPattern $intf_ip
+		    ixNet commit
+        }
 	} else {
-		set int [ ixNet getL $handle interface ]
-		if { [ llength $int ] == 0 } {
+		if { [ llength $ipv4List ] == 0 } {
 			return [ GetErrorReturnHeader "No ping source identified or no interface created under current port." ]
 		}
-		
 	}
 
 Deputs Step10
 	set pingResult [ list ]
 	for { set index 0 } { $index < $count } { incr index } {
-		
 		lappend pingResult [ ixNet exec sendPing $int $dut_ip ]
+        puts "ping Result is $pingResult"
 		after $interval
 	}
 Deputs Step20
-	set pingPass	0
+	set pingPass 0
 	foreach result $pingResult {
 		if { [ regexp {failed} $result ] } {
 			incr pingFalse
@@ -1703,25 +1701,22 @@ Deputs Step60
 
 body Port::send_arp { } {
     set tag "body Port::send_arp [info script]"
-Deputs "----- TAG: $tag -----"
+Deputs "----- TAG: $tag ----- handle $handle"
 
-	
-	set intList [ ixNet getL $handle interface ]
+    set intList [getProtocolHandleFromPortHandle $handle "ipv4"]
+    puts "intList got $intList"
     if { $intList != "" } {
         foreach int $intList {
-            ixNet execs sendArpAndNS $int
+            ixNet execs sendArp $int
         }
         after 1000
     }
-	
     return [GetStandardReturnHeader]    
-	
 }
 
 body Port::set_dhcpv4 { args } {
     set tag "body Port::set_dhcpv4 [info script]"
 Deputs "----- TAG: $tag -----"
-
 	global errNumber
 #param collection
 Deputs "Args:$args "
@@ -1729,6 +1724,7 @@ Deputs "Args:$args "
         set key [string tolower $key]
         switch -exact -- $key {
 			-request_rate {
+                puts "1"
                 if { [ string is integer $value ] && ( $value >= 0 ) && ( $value <= 100000 ) } {
                     set request_rate $value
                 } else {
@@ -1736,6 +1732,7 @@ Deputs "Args:$args "
                 }
 			}
 			-max_request_rate {
+                puts "2"
                 if { [ string is integer $value ] && ( $value >= 0 ) && ( $value <= 100000 ) } {
                     set max_request_rate $value
                 } else {
@@ -1743,6 +1740,7 @@ Deputs "Args:$args "
                 }
 			}
 			-request_rate_step {
+                puts "3"
                 if { [ string is integer $value ] && ( $value >= 0 ) && ( $value <= 100000 ) } {
                     set request_rate_step $value
                 } else {
@@ -1790,65 +1788,100 @@ Deputs "Args:$args "
             }
 		}
 	}
-	
-	set root [ixNet getRoot]
-	set dhcpGlobals [ ixNet getL $root/globals/protocolStack dhcpGlobals ]
-    if { $dhcpGlobals == ""} {
-	    set dhcpGlobals [ ixNet add $root/globals/protocolStack dhcpGlobals ]
-	}
-    set dhcpOptions [ ixNet getL $handle/protocolStack dhcpOptions ]
+
+    puts "5"
+    set root [ixNet getRoot]
+	set dhcpGlobals [ixNet getL /globals/topology dhcpv4client]
+	if { [ info exists retry_attempts ] } {
+		Deputs "updating retry_attempts"
+       	set ipPattern [ixNet getA [ixNet getA $dhcpGlobals -dhcp4NumRetry] -pattern]
+        SetMultiValues $dhcpGlobals "-dhcp4NumRetry" $ipPattern $retry_attempts
+    }
+    
     if { [info exists override_global_setup] && $override_global_setup } {
         if { [ info exists request_rate ] } {
-            ixNet setA $dhcpOptions -overrideGlobalSetupRate true
-            ixNet setA $dhcpOptions -setupRateInitial $request_rate
-            ixNet setA $dhcpOptions -setupRateMax $request_rate
+           set ipPattern [ixNet getA [ixNet getA $dhcpGlobals/startRate -interval] -pattern]
+           set dhcpObj $dhcpGlobals/startRate
+           SetMultiValues $dhcpObj "-interval" $ipPattern $request_rate
+           ########################################################
+		   set ipPattern [ixNet getA [ixNet getA $dhcpGlobals/startRate -maxOutstanding] -pattern]
+           SetMultiValues $dhcpObj "-interval" $ipPattern $request_rate
         }
-        if { [ info exists max_outstanding_session ] } {
-            ixNet setA $dhcpOptions -overrideGlobalSetupRate true
-            ixNet setA $dhcpOptions -overrideGlobalTeardownRate true
-            ixNet setA $dhcpOptions -maxOutstandingRequests $max_outstanding_session
-            ixNet setA $dhcpOptions -maxOutstandingReleases $max_outstanding_session
+        if { [ info exists outstanding_session ] } {
+           set ipPattern [ixNet getA [ixNet getA $dhcpGlobals/startRate -maxOutstanding] -pattern]
+           set dhcpObj $dhcpGlobals/startRate
+           SetMultiValues $dhcpObj "-maxOutstanding" $ipPattern $outstanding_session
+           set ipPattern [ixNet getA [ixNet getA $dhcpGlobals/stopRate -maxOutstanding] -pattern]
+           set dhcpObj $dhcpGlobals/stopRate
+           SetMultiValues $dhcpObj "-maxOutstanding" $ipPattern $outstanding_session
         }
         if { [ info exists release_rate ] } {
-            ixNet setA $dhcpOptions -overrideGlobalTeardownRate true
-            ixNet setA $dhcpOptions -teardownRateInitial $release_rate
-            ixNet setA $dhcpOptions -teardownRateMax $release_rate
+           set ipPattern [ixNet getA [ixNet getA $dhcpGlobals/stopRate -rate] -pattern]
+           set dhcpObj $dhcpGlobals/stopRate
+           SetMultiValues $dhcpObj "-rate" $ipPattern $release_rate
+           set ipPattern [ixNet getA [ixNet getA $dhcpGlobals/stopRate -maxOutstanding] -pattern]
+           SetMultiValues $dhcpObj "-maxOutstanding" $ipPattern $release_rate
         }
     } else {
         if { [ info exists request_rate ] } {
-            ixNet setA $dhcpOptions -overrideGlobalSetupRate false
-            ixNet setA $dhcpGlobals -setupRateInitial $request_rate
-            ixNet setA $dhcpGlobals -setupRateMax $request_rate
+           set ipPattern [ixNet getA [ixNet getA $dhcpGlobals/startRate -interval] -pattern]
+           set dhcpObj $dhcpGlobals/startRate
+           SetMultiValues $dhcpObj "-interval" $ipPattern $request_rate
+           set ipPattern [ixNet getA [ixNet getA $dhcpGlobals/startRate -maxOutstanding] -pattern]
+           SetMultiValues $dhcpObj "-maxOutstanding" $ipPattern $request_rate
         }
-        if { [ info exists max_outstanding_session ] } {
-            ixNet setA $dhcpOptions -overrideGlobalSetupRate false
-            ixNet setA $dhcpOptions -overrideGlobalTeardownRate false
-            ixNet setA $dhcpGlobals -maxOutstandingRequests $max_outstanding_session
-            ixNet setA $dhcpGlobals -maxOutstandingReleases $max_outstanding_session
+        if { [ info exists outstanding_session ] } {
+           set ipPattern [ixNet getA [ixNet getA $dhcpGlobals/startRate -maxOutstanding] -pattern]
+           set dhcpObj $dhcpGlobals/startRate
+           SetMultiValues $dhcpObj "-maxOutstanding" $ipPattern $outstanding_session
         }
         if { [ info exists release_rate ] } {
-            ixNet setA $dhcpOptions -overrideGlobalTeardownRate false
-            ixNet setA $dhcpGlobals -teardownRateInitial $release_rate
-            ixNet setA $dhcpGlobals -teardownRateMax $release_rate
+           set ipPattern [ixNet getA [ixNet getA $dhcpGlobals/stopRate -rate] -pattern]
+           set dhcpObj $dhcpGlobals/stopRate
+           SetMultiValues $dhcpObj "-rate" $ipPattern $release_rate
+           set ipPattern [ixNet getA [ixNet getA $dhcpGlobals/stopRate -maxOutstanding] -pattern]
+           SetMultiValues $dhcpObj "-maxOutstanding" $ipPattern $outstanding_session
         }
     }
-	
+	puts "6"
 	if { [ info exists max_request_rate ] } {
-		ixNet setA $dhcpGlobals -setupRateMax $max_request_rate
+		# ixNet setA $dhcpGlobals -setupRateMax $max_request_rate
+        set ipPattern [ixNet getA [ixNet getA $dhcpGlobals/startRate -interval] -pattern]
+        set dhcpObj $dhcpGlobals/startRate
+        SetMultiValues $dhcpObj "-interval" $ipPattern $max_request_rate
+        ########################################################
+		set ipPattern [ixNet getA [ixNet getA $dhcpGlobals/startRate -maxOutstanding] -pattern]
+        SetMultiValues $dhcpObj "-interval" $ipPattern $max_request_rate
 	}
 	if { [ info exists request_rate_step ] } {
-		ixNet setA $dhcpGlobals -setupRateIncrement $request_rate_step
+		# ixNet setA $dhcpGlobals -setupRateIncrement $request_rate_step
+        ixNet setA [ixNet getA $dhcpGlobals/startRate -interval] -pattern "counter"
+        set dhcpObj $dhcpGlobals/startRate
+        SetMultiValues $dhcpObj "-step" "counter" $request_rate_step
+        ########################################################
+	    ixNet setA [ixNet getA $dhcpGlobals/startRate -maxOutstanding] -pattern "counter"
+        SetMultiValues $dhcpObj "-step" "counter" $request_rate_step
 	}
 	
     if { [ info exists lease_time ] } {
-		ixNet setA $dhcpGlobals  -dhcp4AddrLeaseTime  $lease_time
+		# ixNet setA $dhcpGlobals  -dhcp4AddrLeaseTime  $lease_time
+        Deputs "No proper mapping found for AddrLeaseTime"
 	}
 	
 	if { [ info exists max_release_rate ] } {
-		ixNet setA $dhcpGlobals -teardownRateMax $max_release_rate
+        set ipPattern [ixNet getA [ixNet getA $dhcpGlobals/stopRate -rate] -pattern]
+        set dhcpObj $dhcpGlobals/stopRate
+        SetMultiValues $dhcpObj "-rate" $ipPattern $max_release_rate
+        set ipPattern [ixNet getA [ixNet getA $dhcpGlobals/stopRate -maxOutstanding] -pattern]
+        SetMultiValues $dhcpObj "-maxOutstanding" $ipPattern $max_release_rate
 	}
 	if { [ info exists release_rate_step ] } {
 		ixNet setA $dhcpGlobals -teardownRateIncrement $release_rate_step
+        ixNet setA [ixNet getA $dhcpGlobals/stopRate -rate] -pattern "counter"
+        set dhcpObj $dhcpGlobals/stopRate
+        SetMultiValues $dhcpObj "-rate" "counter" $max_release_rate
+        ixNet setA [ixNet getA $dhcpGlobals/stopRate -maxOutstanding] -pattern "counter"
+        SetMultiValues $dhcpObj "-maxOutstanding" "counter" $release_rate_step
 	}
 	
 	
@@ -1905,9 +1938,9 @@ Deputs "Args:$args "
 	}
     
     set root [ixNet getRoot]
-	set globalSetting [ ixNet getL $root/globals/protocolStack dot1xGlobals ]
+	set globalSetting [ ixNet getL /globals/protocolStack/dot1xGlobals]
     if { $globalSetting == ""} {
-	    set globalSetting [ ixNet add $root/globals/protocolStack dot1xGlobals ]
+	    set globalSetting [ ixNet add /globals/protocolStack dot1xGlobals]
 	}
 	if { [ info exists auth_rate ] } {
 		ixNet setA $globalSetting -maxClientsPerSecond $auth_rate
@@ -2820,6 +2853,7 @@ Deputs "Args:$args "
 	set root [ixNet getRoot]
 	set allObj [ find objects ]
 	set trafficObj [ list ]
+    debug 1
 	foreach obj $allObj {
 		if { [ $obj isa Traffic ] } {
 			if { [ $obj cget -hPort ] == $handle } {
@@ -3148,8 +3182,11 @@ body Host::config { args } {
 			}
 		}
     }	
+    if { $static == 0} {
     if { [info exists ipv4_prefix_len] } {
         if { $ipv4_prefix_len != "" } {
+            Deputs "checking for type 1"
+            debug 1
             if {$type == "ipv4"} {
                 if {[string first "." $ipv4_prefix_len] != -1} {
                     set ipv4_prefix_len [SubnetToPrefixlenV4 $ipv4_prefix_len]
@@ -3160,11 +3197,15 @@ body Host::config { args } {
                 set ipv4_prefix_len $ipv4_prefix_len
             }
         } else {
-            if {$type == "ipv4"} {
-                set ipv4_prefix_len 24
-            } else {
-                set ipv6_prefix_len 64
-            }
+                if {[info exists ipv4_addr] || [info exists ipv6_addr]} {
+                    Deputs "checking for type 2"
+                    debug 1
+                    if {$type == "ipv4"} {
+                        set ipv4_prefix_len 24
+                    } else {
+                        set ipv6_prefix_len 64
+                    }
+                }
         }
     }
     if { [info exists ipv4_addr_step] } {
@@ -3201,17 +3242,21 @@ body Host::config { args } {
 		set gwPfxIncr	[ GetStepPrefixlen $ipv4_gw_step ]
 	}
     Deputs "pfxIncr:$pfxIncr"	
-	if { [ info exists static] == 0 } {
-		if { [ info exists ipv4_addr ] } {
-			set static 0
-		}
-		if { [ info exists ipv6_addr ] } {
-			set static 0
-		}
+	if { [ info exists static] } {
+	if { [ info exists ipv4_addr ] } {
+		set static 0
 	}
+    if { [ info exists ipv6_addr ] } {
+		set static 0
+	}
+	}
+
+    }
 
     set int ""
 	if { $static } {
+        Deputs "entered into static block"
+        debug 1
         set topoList [ixNet getL / topology]
         ## check topologies are already created
         if {[llength $topoList] != 0} {
@@ -3556,7 +3601,3 @@ Deputs Step20
 	return $pingPass
 
 }
-
-
-
-
