@@ -602,26 +602,42 @@ proc GetValidNgpfHandleObj { objType handle { parentHnd "" } } {
 			return ""
 		}
         pim_router {
-			set protocols [ixNet getL $parentHnd protocols]
-			set protocol [ixNet getL $protocols pimsm]
-			if { [ ixNet getA $protocol -enabled ] } {
-				set routers [ixNet getL $protocol router]
-				foreach router $routers {
-					if { $router == $handle } {
-						return $handle
-					} 
-                    if {[ixNet getA [ixNet getA [lindex [ixNet getL $router interface] 0] -interfaces] -description] == $handle} {
-                        return $router
+			set topoObjList [ixNet getL [ixNet getRoot] topology]
+            if { [ llength $topoObjList ] != 0 } {
+                foreach topoObj $topoObjList {
+                    set vportObj [ixNet getA $topoObj -vports]
+                    if {$vportObj == $parentHnd} {
+                        set deviceGroupList [ixNet getL $topoObj deviceGroup]
+                        foreach deviceObj $deviceGroupList {
+                            set ethernetObjList [ixNet getL $deviceObj ethernet]
+                            foreach ethernetObj $ethernetObjList {
+                                set ipv4ObjList [ixNet getL $ethernetObj ipv4]
+                                set ipv6ObjList [ixNet getL $ethernetObj ipv6]
+                                if { [ llength $ipv4ObjList ] != 0 } {
+                                    foreach ipv4Obj $ipv4ObjList {
+                                        set pimObj [ixNet getL $ipv4Obj pimV4Interface]
+                                        if { $pimObj != "" } {
+                                            return $pimObj
+                                        }
+                                    }
+                                }
+                                if { [ llength $ipv6ObjList ] != 0 } {
+                                    foreach ipv6Obj $ipv6ObjList {
+                                        set pimObj [ixNet getL $ipv6Obj pimV6Interface]
+                                        if { $pimObj != ""} {
+                                            return $pimObj
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
-				}
-				
-				# set index [expr $index - 1]
-				# if { $index >= 0 && [llength $hosts] != 0 && [llength $hosts] > $index } {
-					# return [lindex $hosts $index]
-				# }
-			}			
-			return ""
+                }
+            } else {
+                return ""
+            }
 		}
+
 		mld_host {
 			set protocols [ixNet getL $parentHnd protocols]
 			set protocol [ixNet getL $protocols mld]
@@ -882,6 +898,25 @@ proc GetValidNgpfHandleObj { objType handle { parentHnd "" } } {
 			return ""
 		}
         l2tp {
+			set topoObjList [ixNet getL [ixNet getRoot] topology]
+			if { [ llength $topoObjList ] != 0 } {
+			    foreach topoObj $topoObjList {
+			        set vportObj [ixNet getA $topoObj -vports]
+			        if {$vportObj == $parentHnd} {
+			            set deviceGroupList [ixNet getL $topoObj deviceGroup]
+			            foreach deviceObj $deviceGroupList {
+                            set ethernetObjList [ixNet getL $deviceObj ethernet]
+                            foreach ethernetObj $ethernetObjList {
+                                set ipStack [ixNet getL $ethernetObj ipv4]
+                                if { $ipStack == "" } {
+                                    continue
+                                }
+                            }
+                        }
+			        }
+			    }
+			}
+			set protocol [ixNet getL $protocols bgp]
 			set protocolStack [ixNet getL $parentHnd protocolStack]
 			set ethernets [ixNet getL $protocolStack ethernet]
 			foreach ethernet $ethernets {
@@ -893,7 +928,7 @@ proc GetValidNgpfHandleObj { objType handle { parentHnd "" } } {
                 if { $stack == "" } {
 					continue
 				}
-                
+
 				set ranges [ixNet getL $stack range]
 				foreach range $ranges {
                     set rangeName [ixNet getA $range/l2tpRange -name]
@@ -1102,6 +1137,61 @@ if { [ catch {
 } err ] } {
 	if { [ catch {
 			source [file join $currDir Ixia_NetNgpfLdp.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+}
+
+puts "load package Ixia_NetNgpfPim.."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfPim.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetNgpfPim.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+}
+
+puts "load package Ixia_NetNgpfL2TP..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfL2TP.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetNgpfL2TP.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+}
+
+puts "load package Ixia_NetNgpfL3Vpn6Vpe..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfL3Vpn6Vpe.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetNgpfL3Vpn6Vpe.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+}
+
+puts "load package Ixia_NetNgpfRFC2544..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfRFC2544.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetNgpfRFC2544.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+}
+
+puts "load package Ixia_NetNgpfBfd..."
+if { [ catch {
+	source [file join $currDir Ixia_NetNgpfBfd.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetNgpfBfd.tbc]
 	} tbcErr ] } {
 		puts "load package fail...$err $tbcErr"
 	}
