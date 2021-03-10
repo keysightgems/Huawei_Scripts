@@ -17,6 +17,7 @@ class L2tpHost {
 	public variable rangeStats
 	public variable hostCnt
 	public variable hL2tp
+	public variable pppoxObj
     
     constructor { port { onStack null } { hl2tp null } } { chain $port $onStack $hl2tp } {
         set tag "L2tpHost::constructor [info script]"
@@ -132,7 +133,6 @@ body L2tpHost::reborn { { onStack null } } {
                         lappend vportTopoList $vportObj
                     }
                     if {[string first $hPort $vportTopoList] == -1} {
-
                         set topoObj [ixNet add [ixNet getRoot] topology -vports $hPort]
                         ixNet commit
                         set deviceGroupObj [ixNet add $topoObj deviceGroup]
@@ -164,10 +164,10 @@ body L2tpHost::reborn { { onStack null } } {
         ixNet commit
         set sg_l2tp [ixNet add $ipv4Obj lac]
         ixNet commit
-
         set sg_l2tp [ ixNet remapIds $sg_l2tp ]
         ixNet setA $sg_l2tp -name $this
         ixNet commit
+        set pppoxObj [ createPppox $sg_l2tp ]
         array set routeBlock [ list ]
 
     } else {
@@ -183,10 +183,17 @@ body L2tpHost::reborn { { onStack null } } {
                             set sg_l2tp [ixNet getL $ipv4Obj lac]
                             if {[llength $sg_l2tp] != 0} {
                                 set sg_l2tp [ ixNet remapIds $sg_l2tp ]
+                                set pppoxObj [ getPppoxObj $sg_l2tp ]
+                                if {[llength $pppoxObj] != 0} {
+                                    set pppoxObj [ ixNet remapIds $pppoxObj ]
+                                } else {
+                                    set pppoxObj [ createPppox $sg_l2tp ]
+                                }
                             } else {
                                 set sg_l2tp [ixNet add $ipv4Obj lac]
                                 ixNet commit
                                 set sg_l2tp [ ixNet remapIds $sg_l2tp ]
+                                set pppoxObj [ createPppox $sg_l2tp ]
                             }
 
                         } else {
@@ -195,6 +202,7 @@ body L2tpHost::reborn { { onStack null } } {
                             set sg_l2tp [ixNet add $ipv4Obj lac]
                             ixNet commit
                             set sg_l2tp [ ixNet remapIds $sg_l2tp ]
+                            set pppoxObj [ createPppox $sg_l2tp ]
                         }
                    }
                 }
@@ -203,50 +211,30 @@ body L2tpHost::reborn { { onStack null } } {
         ixNet setA $sg_l2tp -name $this
         ixNet commit
     }
-
-    Deputs "sg_l2tp: $sg_l2tp"
-    #ixNet setA $sg_l2tp -name $this
-    ixNet commit
-    set sg_l2tp [lindex [ixNet remapIds $sg_l2tp] 0]
-    set hL2tp $sg_l2tp
-
-    #-- add range on the ethernet 
-
-	set deviceGroupObj [GetDependentNgpfProtocolHandle $hL2tp "deviceGroup"]		
-    set networkGroupList [ixNet getL $deviceGroupObj "networkGroup"]
-    if { [ llength $networkGroupList ] == 0 } {
-		set networkGroupObj [ixNet add $deviceGroupObj "networkGroup"]
-        ixNet commit
-        set networkGroupObj [ ixNet remapIds $networkGroupObj ]
-        set networkGroupList [ixNet getL $deviceGroupObj "networkGroup"]
-    }
-    foreach networkGroupObj  $networkGroupList {
-	    set macPoolsObj [ixNet getL $networkGroupObj "macPools"]
-		if { [ llength $macPoolsObj ] == 0 } {
-		    set macPoolsObj [ixNet add $networkGroupObj "macPools"]
-		    ixNet commit
-	        set macPoolsObj [ ixNet remapIds $macPoolsObj ]
-        }
-		ixNet setA [ixNet getA $macPoolsObj -enableVlans]/singleValue -value false
-		ixNet commit  
-        
-        set ipPoolObj [ixNet add $networkGroupObj "ipv4PrefixPools"]
-				ixNet commit
-		   	    ixNet setM $ipPoolObj -addrStepSupported true -name "Basic\ IPv4\ Addresses\ 1"
-				ixNet commit
-
-		}
-
-	ixNet setM $sg_l2tp -multiplier 1 -active true -name $this
-    
-    ixNet commit
-    set sg_l2tp [ixNet remapIds $sg_l2tp]
-    
     set handle $sg_l2tp
-	
+    set hL2tp $sg_l2tp
 	ixNet commit
 }
-
+proc createPppox {sg_l2tp} {
+    set deviceGroupObj [GetDependentNgpfProtocolHandle $sg_l2tp "deviceGroup"]
+    set pppoxdeviceObj [ixNet add $deviceGroupObj deviceGroup]
+    ixNet commit
+    set pppoxdeviceObj [ ixNet remapIds $pppoxdeviceObj ]
+    set pppoxethernetObj [ixNet add $pppoxdeviceObj ethernet]
+    ixNet commit
+    set pppoxethernetObj [ ixNet remapIds $pppoxethernetObj ]
+    set pppoxObj [ixNet add $pppoxethernetObj pppoxclient]
+    ixNet commit
+    set pppoxObj [ ixNet remapIds $pppoxObj ]
+    return $pppoxObj
+}
+proc getPppoxObj {sg_l2tp} {
+    set deviceGroupObj [GetDependentNgpfProtocolHandle $sg_l2tp "deviceGroup"]
+    set pppoxdeviceObj [ixNet getL $deviceGroupObj deviceGroup]
+    set pppoxethernetObj [ixNet getL $pppoxdeviceObj ethernet]
+    set pppoxObj [ixNet getL $pppoxethernetObj pppoxclient]
+    return $pppoxObj
+}
 body L2tpHost::config { args } {
     global errorInfo
     global errNumber
@@ -325,8 +313,7 @@ body L2tpHost::config { args } {
     }
 
     if { [ info exists ip_type ] } {
-		#set ipPattern [ixNet getA [ixNet getA $handle -ipType] -pattern]
-		#SetMultiValues $handle "-ipType" $ipPattern $ip_type
+        # Not required for NGPF
 	}
     set ipObj [GetDependentNgpfProtocolHandle $handle "ipv4"]
     if { [ info exists ip_address ] } {
@@ -345,12 +332,15 @@ body L2tpHost::config { args } {
 	}
 	
 	if { [ info exists session_per_tunnel_count ] } {
-		ixNet setA $handle -tunnelsPerInterfaceMultiplier $session_per_tunnel_count
+	    set deviceGroupObj [GetDependentNgpfProtocolHandle $handle "deviceGroup"]
+        set pppoxdeviceObj [ixNet getL $deviceGroupObj deviceGroup]
+		ixNet setA $pppoxdeviceObj -multiplier $session_per_tunnel_count
+		ixNet commit
 	}
 	
 	if { [ info exists session_num ] } {
-		#set ipPattern [ixNet getA [ixNet getA $handle -tunnelsPerInterfaceMultiplier ] -pattern]
-		#SetMultiValues $handle "-tunnelsPerInterfaceMultiplier " $ipPattern $session_num
+	    ixNet setA $handle -tunnelsPerInterfaceMultiplier $session_num
+		ixNet commit
 	}
     
     if { [ info exists tunnel_destination_ip ] } {
@@ -374,75 +364,79 @@ body L2tpHost::config { args } {
 	}
         
    	if { [ info exists mru ] } {
-		#set ipPattern [ixNet getA [ixNet getA $handle -mtu] -pattern]
-		#SetMultiValues $handle "-mtu" $ipPattern $mru
+   	    set pppoxObj [ getPppoxObj $handle ]
+		set ethernetObj [GetDependentNgpfProtocolHandle $pppoxObj "ethernet"]
+		set ipPattern [ixNet getA [ixNet getA $ethernetObj -mtu] -pattern]
+		SetMultiValues $ethernetObj "-mtu" $ipPattern $mru
 	}
 	
 	if { [ info exists ipcp_encap ] } {
 		switch $ipcp_encap {
 			ipv4 {
-				set ipcp_encap IPv4
+				set ipcp_encap ipv4
 			}
 			ipv6 {
-				set ipcp_encap IPv6
+				set ipcp_encap ipv6
 			}
 			ipv4v6 {
-				set ipcp_encap DualStack
+				set ipcp_encap "dual_stack"
 			}
 		}
-
-		#set ipPattern [ixNet getA [ixNet getA $handle -ncpType] -pattern]
-		#SetMultiValues $handle "-ncpType" $ipPattern $ipcp_encap
-		
+		set pppoxObj [ getPppoxObj $handle ]
+		set ipPattern [ixNet getA [ixNet getA $pppoxObj -ncpType] -pattern]
+		SetMultiValues $pppoxObj "-ncpType" $ipPattern $ipcp_encap
 	}
 	
 	if { [ info exists session_auth_type ] } {
 		switch $session_auth_type {
 			paporchap {
-				set authentication papOrChap
+				set authentication "pap_or_chap"
+				set pppoxObj [ getPppoxObj $handle ]
 				if { [ info exists session_user ] } {
-					ixNet setMultiAttrs $handle/l2tpRange \
-					    -papUser $session_user
-                    ixNet setMultiAttrs $handle/l2tpRange \
-					    -chapName $session_user
+				    set ipPattern [ixNet getA [ixNet getA $pppoxObj -papUser] -pattern]
+		            SetMultiValues $pppoxObj "-papUser" $ipPattern $session_user
+		            set ipPattern [ixNet getA [ixNet getA $pppoxObj -chapName] -pattern]
+		            SetMultiValues $pppoxObj "-chapName" $ipPattern $session_user
 				}
 				if { [ info exists session_password ] } {
-					ixNet setMultiAttrs $handle/l2tpRange \
-					   -papPassword $session_password
-                    ixNet setMultiAttrs $handle/l2tpRange \
-					   -chapSecret $session_password
+				    set ipPattern [ixNet getA [ixNet getA $pppoxObj -papPassword] -pattern]
+		            SetMultiValues $pppoxObj "-papPassword" $ipPattern $session_password
+		            set ipPattern [ixNet getA [ixNet getA $pppoxObj -chapSecret] -pattern]
+		            SetMultiValues $pppoxObj "-chapSecret" $ipPattern $session_password
 				}
-					
 			}
             pap {
-                set authentication pap
-				if { [ info exists session_user ] } {
-					set ipPattern [ixNet getA [ixNet getA $handle -authType] -pattern]
-					SetMultiValues $handle "-authType" $ipPattern $authentication
-	
+                    set authentication pap
+                    set pppoxObj [ getPppoxObj $handle ]
+                    if { [ info exists session_user ] } {
+                        set ipPattern [ixNet getA [ixNet getA $pppoxObj -papUser] -pattern]
+                        SetMultiValues $pppoxObj "-papUser" $ipPattern $session_user
+                    }
+                    if { [ info exists session_password ] } {
+                        set ipPattern [ixNet getA [ixNet getA $pppoxObj -papPassword] -pattern]
+                        SetMultiValues $pppoxObj "-papPassword" $ipPattern $session_password
+                    }
 				}
-				if { [ info exists session_password ] } {
-					set ipPattern [ixNet getA [ixNet getA $handle -papPassword] -pattern]
-					SetMultiValues $handle "-papPassword" $ipPattern $authentication
-	
-				}	            }
 			chap {
 				set authentication chap
+				set pppoxObj [ getPppoxObj $handle ]
 				if { [ info exists session_user ] } {
-					set ipPattern [ixNet getA [ixNet getA $handle -chapName	] -pattern]
-					SetMultiValues $handle "-chapName" $ipPattern $authentication
+					set ipPattern [ixNet getA [ixNet getA $pppoxObj -chapName] -pattern]
+		            SetMultiValues $pppoxObj "-chapName" $ipPattern $session_user
 				}
 				if { [ info exists session_password ] } {
-					set ipPattern [ixNet getA [ixNet getA $handle -chapSecret] -pattern]
-					SetMultiValues $handle "-chapSecret" $ipPattern $authentication
+					set ipPattern [ixNet getA [ixNet getA $pppoxObj -chapSecret] -pattern]
+		            SetMultiValues $pppoxObj "-chapSecret" $ipPattern $session_password
 				}			
 			}
+			none {
+			    set authentication none
+			}
 		}
-		#set ipPattern [ixNet getA [ixNet getA $handle -authType] -pattern]
-		#SetMultiValues $handle "-authType" $ipPattern $authentication
+		set ipPattern [ixNet getA [ixNet getA $pppoxObj -authType] -pattern]
+		SetMultiValues $pppoxObj "-authType" $ipPattern $authentication
 		
 	}
-
 	ixNet commit
 	return [GetStandardReturnHeader]
 }
