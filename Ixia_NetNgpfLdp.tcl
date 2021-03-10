@@ -137,11 +137,11 @@ Deputs "----- TAG: $tag -----"
 		#Retrive the interface         
 		set rb_interface [GetDependentNgpfProtocolHandle $handle "ethernet"]		
 		Deputs "rb_interface is: $rb_interface"
-
+        ixNet setA $handle -name $this
 		$this configure -handle $handle
 		$this configure -version $ip_version
 		set protocol ldp			
-	
+	    ixNet commit
 		array set interface [ list ]
 		generate_interface		
     }

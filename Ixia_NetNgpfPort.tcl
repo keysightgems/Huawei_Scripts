@@ -1109,73 +1109,25 @@ body Port::config { args } {
 
     if { [info exists intf_ip_step] && $intf_ip_step != ""} {
         if {$mask != ""} {
-           if {$mask == 8} {
-                set ipv4AddrStepValue [string replace "0.0.0.0" 0 0 $intf_ip_step]
-            } elseif  {$mask == 16} {
-                set ipv4AddrStepValue [string replace "0.0.0.0" 2 2 $intf_ip_step]
-            } elseif  {$mask == 24} {
-                set ipv4AddrStepValue [string replace "0.0.0.0" 4 4 $intf_ip_step]
-            } else {
-                set ipv4AddrStepValue [string replace "0.0.0.0" 6 6 $intf_ip_step]
-            }
+            set ipv4AddrStepValue [GetIpV46Step "ipv4" $mask $intf_ip_step]
         }
     }
 
     if {[info exists dut_ip_step] && $dut_ip_step != "" } {
         if {$mask != ""} {
-           if {$mask == 8} {
-                set ipv4DutStepValue [string replace "0.0.0.0" 0 0 $dut_ip_step]
-            } elseif  {$mask == 16} {
-                set ipv4DutStepValue [string replace "0.0.0.0" 2 2 $dut_ip_step]
-            } elseif  {$mask == 24} {
-                set ipv4DutStepValue [string replace "0.0.0.0" 4 4 $dut_ip_step]
-            } else {
-                set ipv4DutStepValue [string replace "0.0.0.0" 6 6 $dut_ip_step]
-            }
+            set ipv4DutStepValue [GetIpV46Step "ipv4" $mask $dut_ip_step]
         }
     }
 
     if {[info exists ipv6_addr_step] && $ipv6_addr_step != ""} {
         if {$ipv6_mask != ""} {
-           if {$ipv6_mask == 16} {
-               set ipv6AddrStepValue [string replace "0:0:0:0:0:0:0:0" 0 0 $ipv6_addr_step]
-            } elseif  {$ipv6_mask == 32} {
-                set ipv6AddrStepValue [string replace "0:0:0:0:0:0:0:0" 2 2 $ipv6_addr_step]
-            } elseif  {$ipv6_mask == 48} {
-                set ipv6AddrStepValue [string replace "0:0:0:0:0:0:0:0" 4 4 $ipv6_addr_step]
-            } elseif  {$ipv6_mask == 64} {
-                set ipv6AddrStepValue [string replace "0:0:0:0:0:0:0:0" 6 6 $ipv6_addr_step]
-            } elseif  {$ipv6_mask == 80} {
-                set ipv6AddrStepValue [string replace "0:0:0:0:0:0:0:0" 8 8 $ipv6_addr_step]
-            } elseif  {$ipv6_mask == 96} {
-                set ipv6AddrStepValue [string replace "0:0:0:0:0:0:0:0" 10 10 $ipv6_addr_step]
-            } elseif  {$ipv6_mask == 112} {
-                set ipv6AddrStepValue [string replace "0:0:0:0:0:0:0:0" 12 12 $ipv6_addr_step]
-            } else {
-                set ipv6AddrStepValue [string replace "0:0:0:0:0:0:0:0" 14 14 $ipv6_addr_step]
-            }
+            set ipv6AddrStepValue [GetIpV46Step "ipv6" $ipv6_mask $ipv6_addr_step]
         }
     }
 
     if {[info exists dut_ip_step] && $dut_ip_step != ""} {
         if {$ipv6_mask != ""} {
-           if {$ipv6_mask == 16} {
-               set ipv6DutStepValue [string replace "0:0:0:0:0:0:0:0" 0 0 $dut_ip_step]
-            } elseif  {$ipv6_mask == 32} {
-                set ipv6DutStepValue [string replace "0:0:0:0:0:0:0:0" 2 2 $dut_ip_step]
-            } elseif  {$ipv6_mask == 48} {
-                set ipv6DutStepValue [string replace "0:0:0:0:0:0:0:0" 4 4 $dut_ip_step]
-            } elseif  {$ipv6_mask == 64} {
-                set ipv6DutStepValue [string replace "0:0:0:0:0:0:0:0" 6 6 $dut_ip_step]
-            } elseif  {$ipv6_mask == 80} {
-                set ipv6DutStepValue [string replace "0:0:0:0:0:0:0:0" 8 8 $dut_ip_step]
-            } elseif  {$ipv6_mask == 96} {
-                set ipv6DutStepValue [string replace "0:0:0:0:0:0:0:0" 10 10 $dut_ip_step]
-            } elseif  {$ipv6_mask == 112} {
-                set ipv6DutStepValue [string replace "0:0:0:0:0:0:0:0" 12 12 $dut_ip_step]
-            } else {
-                set ipv6DutStepValue [string replace "0:0:0:0:0:0:0:0" 14 14 $dut_ip_step]
-            }
+            set ipv6DutStepValue [GetIpV46Step "ipv6" $ipv6_mask $dut_ip_step]
         }
     }
 
@@ -1184,7 +1136,6 @@ body Port::config { args } {
             set deviceGroupObj [ixNet add [lindex $topoObj end] deviceGroup]
             ixNet commit
             set deviceGroupObj [ixNet remapIds $deviceGroupObj]
-
             ixNet setAttr $deviceGroupObj -multiplier 1
             set ethObj [ixNet add $deviceGroupObj ethernet]
             ixNet commit
@@ -1273,9 +1224,13 @@ body Port::config { args } {
                     } else {
                         set ipv6Obj [ lindex [ ixNet getList $ethObj ipv6 ] 0 ]
                     }
-                    ixNet setA [ixNet getA $ipv6Obj -gatewayIp]/counter -start $dut_ipv6
-                    ixNet setA [ixNet getA $ipv6Obj -gatewayIp]/counter -direction increment
-
+                    ixNet setM [ixNet getA $ipv6Obj -gatewayIp]/counter -start $dut_ipv6 -direction increment
+                    #ixNet setA [ixNet getA $ipv6Obj -gatewayIp]/counter -direction increment
+                    ixNet commit
+                    if {[info exists dut_ip_step]} {
+                        ixNet setA [ixNet getA $ipv6Obj -gatewayIp]/counter -step $ipv6DutStepValue
+                        ixNet commit
+                    }
                     ixNet setA [ixNet getA $ipv6Obj -prefix]/counter -start $ipv6_mask
                     ixNet commit
                 }
@@ -1289,12 +1244,12 @@ body Port::config { args } {
                         set ipv4Obj [ lindex [ ixNet getList $ethObj ipv4 ] 0 ]
                     }
                     set ipv4Obj [ixNet remapIds $ipv4Obj]
-                    ixNet setA [ixNet getA $ipv4Obj -address]/counter -start $intf_ip
+                    ixNet setM [ixNet getA $ipv4Obj -address]/counter -start $intf_ip -direction increment
+                    ixNet commit
                     if [info exists intf_ip_step] {
                         ixNet setA [ixNet getA $ipv4Obj -address]/counter -step $ipv4AddrStepValue
                     }
-                    ixNet setA [ixNet getA $ipv4Obj -address]/counter -direction increment
-
+                    #ixNet setA [ixNet getA $ipv4Obj -address]/counter -direction increment
                     ixNet setA [ixNet getA $ipv4Obj -prefix]/counter -start $mask
                     ixNet commit
                     lappend intf_ipv4 $intf_ip
@@ -1308,11 +1263,12 @@ body Port::config { args } {
                     } else {
                         set ipv4Obj [ lindex [ ixNet getList $ethObj ipv4 ] 0 ]
                     }
-                    ixNet setA [ixNet getA $ipv4Obj -gatewayIp]/counter -start $dut_ip
+                    ixNet setM [ixNet getA $ipv4Obj -gatewayIp]/counter -start $dut_ip -direction increment
+                    ixNet commit
                     if {[info exists dut_ip_step]} {
-                        ixNet setA [ixNet getA $ipv4Obj -gatewayIp]/counter -step $dut_ip_step
+                        ixNet setA [ixNet getA $ipv4Obj -gatewayIp]/counter -step $ipv4DutStepValue
                     }
-                    ixNet setA [ixNet getA $ipv4Obj -gatewayIp]/counter -direction increment
+                    #ixNet setA [ixNet getA $ipv4Obj -gatewayIp]/counter -direction increment
 
                     ixNet setA [ixNet getA $ipv4Obj -prefix]/counter -start $mask
                     ixNet commit

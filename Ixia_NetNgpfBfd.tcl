@@ -128,10 +128,11 @@ class BfdSession {
 	    SetMultiValues $handle "-active" $ipPattern True
         ixNet commit
         ixNet exec applyOnTheFly  ::ixNet::OBJ-/globals/topology
-        
+        ixNet setA $handle -name $this
+        Deputs "handle:$handle"
+		set protocol bfd
 		$this configure -handle $handle
-        set protocol bfd
-
+        ixNet commit
 	}
 	
     method config { args } {}

@@ -122,9 +122,15 @@ Deputs "----- TAG: $tag -----"
                     set vportObj [ixNet getA $topoObj -vports]
                     foreach vport $vportList {
                         if {$vportObj != $vport && $vport == $hPort} {
-                            set sg_ethernet [CreateProtoHandleFromRoot $hPort]
-                            set sg_ethernet [ixNet remapIds $sg_ethernet]
-                            set stack $sg_ethernet
+                            if {[llength $topoObj] == 0 } {
+                                set sg_ethernet [CreateProtoHandleFromRoot $hPort]
+                                set sg_ethernet [ixNet remapIds $sg_ethernet]
+                                set stack $sg_ethernet
+                            } else {
+                                set deviceGroupObj [ixNet getL $topoObj deviceGroup]
+                                set sg_ethernet [ixNet getL $deviceGroupObj ethernet]
+                                set stack $sg_ethernet
+                            }
                         }
                     }
                     break

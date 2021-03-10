@@ -767,7 +767,7 @@ body PimGroup::config { args } {
 	global errorInfo
 	global errNumber
 	
-	set enabling_pruning No
+	set enabling_pruning NO
 	set group_type STARG
 	set tag "body PimGroup::config [info script]"
 Deputs "----- TAG: $tag -----"
@@ -807,7 +807,7 @@ Deputs "----- TAG: $tag -----"
 				set enabling_pruning True				
 			}			
 		}
-        set ipPattern [ixNet getA [ixNet getA $hJoinPrune -active] -pattern]
+		set ipPattern [ixNet getA [ixNet getA $hJoinPrune -active] -pattern]
 	    SetMultiValues $hJoinPrune "-active" $ipPattern $enabling_pruning
 	}
 	
@@ -827,7 +827,7 @@ Deputs "----- TAG: $tag -----"
 		set ipPattern [ixNet getA [ixNet getA $hJoinPrune -rangeType] -pattern]
 	    SetMultiValues $hJoinPrune "-rangeType" $ipPattern $group_type
 	}
-	
+
 	if { [ info exists rp_ip_addr ] } {
 		if { $ip_version == "ipv4" } {
             set ipPattern [ixNet getA [ixNet getA $hJoinPrune -rpV4Address] -pattern]
@@ -841,7 +841,6 @@ Deputs "----- TAG: $tag -----"
 	if { [ info exists group ] } {
 		set group [ GetObject $group ]
 		$group configure -handle $hSource
-		
 		if { $group == ""} {
 			return [GetErrorReturnHeader "No valid object found...-group $group"]
 		}
