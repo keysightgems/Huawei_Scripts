@@ -349,6 +349,11 @@ body L2tpHost::config { args } {
 	}
     
     if { [ info exists tunnel_authentication ] } {
+        if {[string first "hostname" $tunnel_authentication] != -1} {
+            set tunnel_authentication authenticate_hostname
+        } else {
+            set tunnel_authentication tunnel_authentication_disabled
+        }
 		set ipPattern [ixNet getA [ixNet getA $handle -tunnelAuthentication] -pattern]
 		SetMultiValues $handle "-tunnelAuthentication" $ipPattern $tunnel_authentication
 	}
@@ -365,9 +370,8 @@ body L2tpHost::config { args } {
         
    	if { [ info exists mru ] } {
    	    set pppoxObj [ getPppoxObj $handle ]
-		set ethernetObj [GetDependentNgpfProtocolHandle $pppoxObj "ethernet"]
-		set ipPattern [ixNet getA [ixNet getA $ethernetObj -mtu] -pattern]
-		SetMultiValues $ethernetObj "-mtu" $ipPattern $mru
+   	    set ipPattern [ixNet getA [ixNet getA $pppoxObj -mtu] -pattern]
+   	    SetMultiValues $pppoxObj "-mtu" $ipPattern $mru
 	}
 	
 	if { [ info exists ipcp_encap ] } {
