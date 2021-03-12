@@ -844,12 +844,11 @@ Deputs "----- TAG: $tag -----"
 		if { $group == ""} {
 			return [GetErrorReturnHeader "No valid object found...-group $group"]
 		}
-		
 		set source_ip 		[ $group cget -source_ip ]
 		set source_num 		[ $group cget -source_num ]
-		set group_ip		[ $group cget -group_ip ]
-		set group_num	[ $group cget -group_num ]
-		set group_modbit	[ $group cget -group_modbit ]
+		set group_ip	    [ $group cget -group_ip ]
+		set group_num   [ $group cget -group_num ]
+		set group_modbit    [ $group cget -group_modbit ]
 		if { [info exists source_ip] } {
 		    set ipPattern [ixNet getA [ixNet getA $hSource -sourceAddress] -pattern]
             SetMultiValues $hSource "-sourceAddress" $ipPattern $source_ip
