@@ -2809,7 +2809,7 @@ Deputs "Args:$args "
 	set root [ixNet getRoot]
 	set allObj [ find objects ]
 	set trafficObj [ list ]
-    debug 1
+
 	foreach obj $allObj {
 		if { [ $obj isa Traffic ] } {
 			if { [ $obj cget -hPort ] == $handle } {
@@ -3142,7 +3142,7 @@ body Host::config { args } {
     if { [info exists ipv4_prefix_len] } {
         if { $ipv4_prefix_len != "" } {
             Deputs "checking for type 1"
-            debug 1
+
             if {$type == "ipv4"} {
                 if {[string first "." $ipv4_prefix_len] != -1} {
                     set ipv4_prefix_len [SubnetToPrefixlenV4 $ipv4_prefix_len]
@@ -3155,7 +3155,7 @@ body Host::config { args } {
         } else {
                 if {[info exists ipv4_addr] || [info exists ipv6_addr]} {
                     Deputs "checking for type 2"
-                    debug 1
+
                     if {$type == "ipv4"} {
                         set ipv4_prefix_len 24
                     } else {
@@ -3212,7 +3212,7 @@ body Host::config { args } {
     set int ""
 	if { $static } {
         Deputs "entered into static block"
-        debug 1
+
         set topoList [ixNet getL / topology]
         ## check topologies are already created
         if {[llength $topoList] != 0} {

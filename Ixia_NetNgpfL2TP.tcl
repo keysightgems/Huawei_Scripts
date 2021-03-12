@@ -317,18 +317,34 @@ body L2tpHost::config { args } {
 	}
     set ipObj [GetDependentNgpfProtocolHandle $handle "ipv4"]
     if { [ info exists ip_address ] } {
-		set ipPattern [ixNet getA [ixNet getA $ipObj -address] -pattern]
-		SetMultiValues $ipObj "-address" $ipPattern $ip_address
+		#set ipPattern [ixNet getA [ixNet getA $ipObj -address] -pattern]
+		#SetMultiValues $ipObj "-address" $ipPattern $ip_address
+		set pppoxObj [ getPppoxObj $handle ]
+		if {[string first "." $ip_address] != -1} {
+            ixNet setM [ixNet getA $pppoxObj -clientLocalIp]/counter -start $ip_address -direction increment
+            ixNet commit
+        } else {
+            ixNet setM [ixNet getA $pppoxObj -clientLocalIpv6Iid]/counter -start $ip_address -direction increment
+            ixNet commit
+        }
+		if { [ info exists ip_gateway ] } {
+		    if {[string first "." $ip_address] != -1} {
+                ixNet setM [ixNet getA $pppoxObj -clientLocalIp]/counter -step $ip_gateway
+                ixNet commit
+            } else {
+                ixNet setM [ixNet getA $pppoxObj -clientLocalIpv6Iid]/counter -step $ip_gateway
+                ixNet commit
+            }
+		}
 	}
-    
-    if { [ info exists ip_gateway ] } {
-		set ipPattern [ixNet getA [ixNet getA $ipObj -gatewayIp] -pattern]
-		SetMultiValues $ipObj "-gatewayIp" $ipPattern $ip_gateway
-	}
-    
     if { [ info exists ip_mask ] } {
-		set ipPattern [ixNet getA [ixNet getA $ipObj -prefix] -pattern]
-		SetMultiValues $ipObj "-prefix" $ipPattern $ip_mask
+		if {[string first "." $ip_mask] != -1} {
+		    set ipMask $ip_mask
+		} else {
+		    set ipMask [PrefixlenToSubnetV4 $ip_mask]
+		}
+        set ipPattern [ixNet getA [ixNet getA $pppoxObj -clientNetmask] -pattern]
+		SetMultiValues $pppoxObj "-clientNetmask" $ipPattern $ipMask
 	}
 	
 	if { [ info exists session_per_tunnel_count ] } {
