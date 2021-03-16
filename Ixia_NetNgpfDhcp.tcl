@@ -3757,6 +3757,7 @@ class Dot1xHost {
             Deputs "new dot1x endpoint"
             chain
             set topoObjList [ixNet getL [ixNet getRoot] topology]
+
 			if { [ llength $topoObjList ] > 0 } {
                 foreach topoObj $topoObjList {
                     set vportObj [ixNet getA $topoObj -vports]
@@ -3775,19 +3776,21 @@ class Dot1xHost {
 				ixNet commit
 				set sg_ethernet [ixNet remapIds $sg_ethernet]
 			} 
-			
+
 			#-- add dhcp endpoint stack
-			set sg_dot1xEndpoint [ixNet add $sg_ethernet dotOneX]
-			ixNet commit
+			set sg_dot1xEndpoint [ixNet getL $sg_ethernet dotOneX]
+			if {[llength $sg_dot1xEndpoint] == 0 } {
+                set sg_dot1xEndpoint [ixNet add $sg_ethernet dotOneX]
+                ixNet commit
+            }
 			set sg_dot1xEndpoint [lindex [ixNet remapIds $sg_dot1xEndpoint] 0]
 			set hDot1x $sg_dot1xEndpoint
 		} else {
             Deputs "based on existing stack:$onStack"
 			set hDot1x $onStack
 		}
-
-	    set handle $sg_dot1xEndpoint
-		
+	    ixNet setA $hDot1x -name $this
+        set handle $sg_dot1xEndpoint
 		ixNet commit
     }
     method config { args } {}

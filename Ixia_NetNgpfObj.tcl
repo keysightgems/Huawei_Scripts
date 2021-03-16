@@ -122,7 +122,8 @@ Deputs "----- TAG: $tag -----"
                     set vportObj [ixNet getA $topoObj -vports]
                     foreach vport $vportList {
                         if {$vportObj != $vport && $vport == $hPort} {
-                            if {[llength $topoObj] == 0 } {
+                            #if {[llength $topoObj] == 0 } {}
+                            if {[llength $topoObjList] < [llength $vportList] && $hPort == [ lindex $vportList end ]} {
                                 set sg_ethernet [CreateProtoHandleFromRoot $hPort]
                                 set sg_ethernet [ixNet remapIds $sg_ethernet]
                                 set stack $sg_ethernet
