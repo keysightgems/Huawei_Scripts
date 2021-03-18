@@ -149,7 +149,8 @@ class DhcpHost {
 	    set handle $hDhcp
 		# set dhcpStackVersion dhcpVersion
 		$this configure -dhcpStackVersion $dhcpVersion
-		
+		ixNet setA $handle -name $this
+        ixNet commit
 		set dhcpGlobal [ixNet add [ixNet getRoot]/globals/protocolStack dhcpGlobals]
 		ixNet commit
 		set dhcpGlobal [ixNet remapIds $dhcpGlobal]
@@ -1660,19 +1661,18 @@ Deputs "Args:$args "
         }
 	
 	if {[info exists group]} {
-	foreach grp $group {
+        foreach grp $group {
+            set group_ip 	[ $grp cget -group_ip ]
+            set group_num [ $grp cget -group_num ]
+            set group_step [ $grp cget -group_step ]
+            set group_modbit [ $grp cget -group_modbit ]
 
-		set group_ip 	[ $grp cget -group_ip ]
-		set group_num [ $grp cget -group_num ]
-		set group_step [ $grp cget -group_step ]
-		set group_modbit [ $grp cget -group_modbit ]
-		
-		set hGroup [ixNet getL $hIgmp igmpMcastIPv4GroupList]
-        set ipPattern [ixNet getA [ixNet getA $hGroup -startMcastAddr] -pattern]
-        SetMultiValues $hGroup "-startMcastAddr" $ipPattern $group_ip
-        set ipPattern [ixNet getA [ixNet getA $hGroup -mcastAddrCnt] -pattern]
-        SetMultiValues $hGroup "-mcastAddrCnt" $ipPattern $group_num
-	}
+            set hGroup [ixNet getL $hIgmp igmpMcastIPv4GroupList]
+            set ipPattern [ixNet getA [ixNet getA $hGroup -startMcastAddr] -pattern]
+            SetMultiValues $hGroup "-startMcastAddr" $ipPattern $group_ip
+            set ipPattern [ixNet getA [ixNet getA $hGroup -mcastAddrCnt] -pattern]
+            SetMultiValues $hGroup "-mcastAddrCnt" $ipPattern $group_num
+        }
 	}
 	ixNet commit
 	return [ GetStandardReturnHeader ]
@@ -3846,11 +3846,10 @@ body Dot1xHost::config { args } {
 			}
         }
     }
-
-	set deviceGroupObj [GetDependentNgpfProtocolHandle $handle "deviceGroup"]
+    set deviceGroupObj [GetDependentNgpfProtocolHandle $handle "deviceGroup"]
 	if { [ info exists count ] } {
 		ixNet setA $deviceGroupObj -multiplier $count
-       ixNet commit
+        ixNet commit
 	}
 
 	if { [ info exists authtype] } {
